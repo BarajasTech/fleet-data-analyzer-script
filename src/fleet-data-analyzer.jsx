@@ -522,14 +522,15 @@ function FaultLane({ label, color, tagColor, times, domain }) {
 }
 
 /* ---------------- fault-lane code picker ---------------- */
-function FaultLaneDropdown({ allCodes, selected, onChange, label = "⚠ Fault lanes", color = C.red, hint = "Each selected code becomes its own pulse lane per vehicle" }) {
+function FaultLaneDropdown({ allCodes, selected, onChange, label = "⚠ Fault lanes", color = C.red, hint = "Each selected code becomes its own pulse lane per vehicle", emptyMeansAll = false, maxSelect = Infinity }) {
+  const capped = (arr) => (arr.length > maxSelect ? arr.slice(arr.length - maxSelect) : arr);
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const list = useMemo(() => {
     const f = q.trim().toLowerCase();
     return f ? allCodes.filter((p) => p.code.toLowerCase().includes(f) || (p.desc || "").toLowerCase().includes(f)) : allCodes;
   }, [allCodes, q]);
-  const toggle = (code) => onChange(selected.includes(code) ? selected.filter((c) => c !== code) : [...selected, code]);
+  const toggle = (code) => onChange(capped(selected.includes(code) ? selected.filter((c) => c !== code) : [...selected, code]));
   return (
     <div style={{ position: "relative" }}>
       <button onClick={() => setOpen(!open)}
@@ -538,7 +539,7 @@ function FaultLaneDropdown({ allCodes, selected, onChange, label = "⚠ Fault la
           fontSize: 12, padding: "6px 12px", cursor: "pointer", background: open ? "#e9f1f1" : "transparent",
           color: color, border: `1px solid ${color}`, borderRadius: 3,
         }}>
-        {label} ({selected.length || "all"}) {open ? "▴" : "▾"}
+        {label} ({selected.length || (emptyMeansAll ? "all" : 0)}) {open ? "▴" : "▾"}
       </button>
       {open && (
         <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 50, width: 360, maxWidth: "85vw", background: "#ffffff", border: `1px solid ${C.faint}`, borderRadius: 6, boxShadow: "0 8px 24px rgba(40,50,60,0.18)", padding: 10 }}>
@@ -547,7 +548,7 @@ function FaultLaneDropdown({ allCodes, selected, onChange, label = "⚠ Fault la
               style={{ flex: 1, background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
             <span onClick={() => setOpen(false)} style={{ color: C.dim, cursor: "pointer", padding: "4px 6px" }}>✕</span>
           </div>
-          <div style={{ display: "flex", gap: 6, marginBottom: 8 }}><Btn small onClick={() => onChange(allCodes.map((p) => p.code))}>Select all</Btn><Btn small onClick={() => onChange([])}>Clear</Btn></div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 8 }}><Btn small onClick={() => onChange(capped(allCodes.map((p) => p.code)))}>Select all{Number.isFinite(maxSelect) ? ` (max ${maxSelect})` : ""}</Btn><Btn small onClick={() => onChange([])}>Clear</Btn></div>
           <div style={{ maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column" }}>
             {list.slice(0, 200).map((p) => {
               const on = selected.includes(p.code);
@@ -759,7 +760,6 @@ export default function FleetDataAnalyzer() {
   const [offset1, setOffset1] = useState(0); // fault-log time offset vs recorder, seconds
   const [offset2, setOffset2] = useState(0);
   const [faultSearch, setFaultSearch] = useState("");
-  const [faultLaneCodes, setFaultLaneCodes] = useState([]); // fault codes rendered as dedicated pulse lanes
   const [statsScope, setStatsScope] = useState("all"); // all | v1 | v2
 
   /* ----- processed per vehicle ----- */
@@ -791,6 +791,8 @@ export default function FleetDataAnalyzer() {
     return ts.length ? [Math.min(...ts), Math.max(...ts)] : null;
   }, [recSpan, faultData1, faultData2]);
 
+  /* the recorder recording is the authoritative timeline: the graph never leaves it */
+  const navFull = recSpan || fullDomain;
   const activeDomain = domain || recSpan || fullDomain;
   const spanMs = activeDomain ? activeDomain[1] - activeDomain[0] : null;
 
@@ -1011,14 +1013,15 @@ export default function FleetDataAnalyzer() {
   };
 
   const clampDomain = useCallback((a, b) => {
-    if (!fullDomain) return [a, b];
-    const minSpan = 2000, full = fullDomain[1] - fullDomain[0];
+    const bounds = navFull;
+    if (!bounds) return [a, b];
+    const minSpan = 2000, full = bounds[1] - bounds[0];
     let span = Math.min(Math.max(b - a, minSpan), full);
     let na = a;
-    if (na < fullDomain[0]) na = fullDomain[0];
-    if (na + span > fullDomain[1]) na = fullDomain[1] - span;
+    if (na < bounds[0]) na = bounds[0];
+    if (na + span > bounds[1]) na = bounds[1] - span;
     return [na, na + span];
-  }, [fullDomain]);
+  }, [navFull]);
 
   const panBy = (frac) => {
     if (!activeDomain) return;
@@ -1084,25 +1087,26 @@ export default function FleetDataAnalyzer() {
   };
 
   const mmTicks = useMemo(() => {
-    if (!mergedFaults.length || !fullDomain) return [];
-    const stride = Math.max(1, Math.ceil(mergedFaults.length / 350));
-    const span = fullDomain[1] - fullDomain[0] || 1;
-    return mergedFaults.filter((_, i) => i % stride === 0).map((f) => ({ frac: (f.t - fullDomain[0]) / span, vi: f.vi }));
-  }, [mergedFaults, fullDomain]);
+    if (!mergedFaults.length || !navFull) return [];
+    const inNav = mergedFaults.filter((f) => f.t >= navFull[0] && f.t <= navFull[1]);
+    const stride = Math.max(1, Math.ceil(inNav.length / 350));
+    const span = navFull[1] - navFull[0] || 1;
+    return inNav.filter((_, i) => i % stride === 0).map((f) => ({ frac: (f.t - navFull[0]) / span, vi: f.vi }));
+  }, [mergedFaults, navFull]);
 
   const mmPointerDown = (e) => {
-    if (!fullDomain || !activeDomain) return;
+    if (!navFull || !activeDomain) return;
     const el = e.currentTarget;
     el.setPointerCapture?.(e.pointerId);
     const rect = el.getBoundingClientRect();
     const frac = (e.clientX - rect.left) / rect.width;
-    const tFull = fullDomain[1] - fullDomain[0];
+    const tFull = navFull[1] - navFull[0];
     const span = activeDomain[1] - activeDomain[0];
-    const winA = (activeDomain[0] - fullDomain[0]) / tFull, winB = (activeDomain[1] - fullDomain[0]) / tFull;
+    const winA = (activeDomain[0] - navFull[0]) / tFull, winB = (activeDomain[1] - navFull[0]) / tFull;
     if (frac >= winA && frac <= winB) {
       mmDragRef.current = { x: e.clientX, dom: [...activeDomain], w: rect.width, tFull };
     } else {
-      const c = fullDomain[0] + frac * tFull;
+      const c = navFull[0] + frac * tFull;
       const nd = clampDomain(c - span / 2, c + span / 2);
       setDomain(nd);
       mmDragRef.current = { x: e.clientX, dom: nd, w: rect.width, tFull };
@@ -1145,7 +1149,8 @@ export default function FleetDataAnalyzer() {
     const dom = tmap ? vActive : activeDomain;
     const showOverlay = chartCfg.showFaults && chartCfg.faultStyle !== "markers";
     const showMarkers = chartCfg.showFaults && chartCfg.faultStyle !== "overlay";
-    // faults as an additional signal: square pulses on the recorder's time axis
+    // Expert/fault data as a discrete channel laid on top of the recorder data:
+    // a logic-style band near the top of the plot (low = no fault, high pulse = fault logged)
     let pulseSeries = [];
     if (showOverlay && faults.length && dom) {
       let H = 100;
@@ -1154,18 +1159,20 @@ export default function FleetDataAnalyzer() {
         for (const r of rows) for (const d of seriesDefs) { const v = r[d.dataKey]; if (v != null && v > mx) mx = v; }
         H = mx > -Infinity ? mx : 1;
       }
+      const bands = { 1: [0.875, 0.985], 2: [0.73, 0.84] }; // per-vehicle band as fraction of scale
       const w = Math.max((dom[1] - dom[0]) / 400, 20); // pulse half-width in axis units
       const groups = {};
       for (const f of faults.slice(0, 400)) (groups[f.vi] = groups[f.vi] || []).push(f);
       const extra = [];
       pulseSeries = Object.entries(groups).map(([vi, fs]) => {
         const key = v2Active ? `⚠ FAULTS V${vi}` : "⚠ FAULTS";
-        extra.push({ t: dom[0], [key]: 0 });
+        const lo = +(H * bands[vi][0]).toFixed(3), hi = +(H * bands[vi][1]).toFixed(3);
+        extra.push({ t: dom[0], [key]: lo });
         for (const f of fs.sort((a, b) => a.t - b.t)) {
           const t = tmap ? tv(f.t) : f.t;
-          extra.push({ t: t - w, [key]: 0 }, { t: t - w + 1, [key]: H }, { t: t + w - 1, [key]: H }, { t: t + w, [key]: 0 });
+          extra.push({ t: t - w, [key]: lo }, { t: t - w + 1, [key]: hi }, { t: t + w - 1, [key]: hi }, { t: t + w, [key]: lo });
         }
-        extra.push({ t: dom[1], [key]: 0 });
+        extra.push({ t: dom[1], [key]: lo });
         return { key, color: VEH[+vi].fault };
       });
       prows = [...prows, ...extra].sort((a, b) => a.t - b.t);
@@ -1230,7 +1237,8 @@ export default function FleetDataAnalyzer() {
       color: VEH[vi].fault,
       times: inWin(src.filter((f) => codeShown(f.code))).map((f) => f.t),
     }];
-    faultLaneCodes.forEach((code, i) => {
+    const laneCodes = visCodes.length && visCodes.length <= 16 ? visCodes : [];
+    laneCodes.forEach((code, i) => {
       const meta = allCodes.find((p) => p.code === code);
       lanes.push({
         key: code,
@@ -1370,8 +1378,7 @@ export default function FleetDataAnalyzer() {
                   <Chip active={viewMode === "separate"} onClick={() => setViewMode("separate")}>2 graphs</Chip>
                 </div>
               )}
-              <FaultLaneDropdown allCodes={allCodes} selected={visCodes} onChange={setVisCodes} label="Faults shown" hint="Selected codes appear as markers/pulses; empty = all faults visible" />
-              <FaultLaneDropdown allCodes={allCodes} selected={faultLaneCodes} onChange={setFaultLaneCodes} color={C.violet} hint="Each selected code becomes its own pulse lane per vehicle" />
+              <FaultLaneDropdown allCodes={allCodes} selected={visCodes} onChange={setVisCodes} label="⚠ Faults" emptyMeansAll hint="Empty = all faults in the ⚠ channel. Pick codes to filter to them — each picked code also gets its own lane (up to 16)." />
               {recData1?.length > 0 && rec1 && (
                 <SignalDropdown label={v2Active ? `${name1} sig` : "Signals"} color={VEH[1].tag} allSignals={rec1.numericCols} selected={rec1.signals} onChange={(s) => setRec1({ ...rec1, signals: s })} />
               )}
@@ -1398,8 +1405,7 @@ export default function FleetDataAnalyzer() {
                       <Btn small onClick={() => zoomBy(2)}>−</Btn>
                       <Btn small onClick={() => setNormalize(!normalize)}>{normalize ? "Raw values" : "Normalize %"}</Btn>
                       <Btn small onClick={() => setContinuous(!continuous)}>{continuous ? "Real time" : "Continuous"}</Btn>
-                      <Btn small onClick={() => { setDomain(recSpan ? [...recSpan] : null); setSelFault(null); }}>Fit recorder</Btn>
-                      <Btn small onClick={() => { setDomain(fullDomain ? [...fullDomain] : null); setSelFault(null); }}>Full range</Btn>
+                      <Btn small onClick={() => { setDomain(recSpan ? [...recSpan] : null); setSelFault(null); }}>Full recording</Btn>
                       <Btn small onClick={() => {
                         if (!rangeOpen && activeDomain) { setRangeFrom(toLocalInput(activeDomain[0])); setRangeTo(toLocalInput(activeDomain[1])); }
                         setRangeOpen(!rangeOpen);
@@ -1591,15 +1597,15 @@ export default function FleetDataAnalyzer() {
                     )}
                   </div>
 
-                  {/* minimap */}
-                  {fullDomain && (
+                  {/* minimap: spans the recorder recording */}
+                  {navFull && (
                     <div onPointerDown={mmPointerDown} onPointerMove={mmPointerMove} onPointerUp={mmPointerUp} onPointerLeave={mmPointerUp}
                       style={{ position: "relative", height: 36, background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 4, marginTop: 10, touchAction: "none", cursor: "pointer", overflow: "hidden", userSelect: "none" }}>
                       {[{ span: recSpan1, col: VEH[1].tag }, { span: recSpan2, col: VEH[2].tag }].map((b, i) => b.span && (
                         <div key={i} style={{
                           position: "absolute", top: i === 0 ? 0 : "50%", height: v2Active ? "50%" : "100%", bottom: 0,
-                          left: `${((b.span[0] - fullDomain[0]) / (fullDomain[1] - fullDomain[0])) * 100}%`,
-                          width: `${Math.max(((b.span[1] - b.span[0]) / (fullDomain[1] - fullDomain[0])) * 100, 0.4)}%`,
+                          left: `${((b.span[0] - navFull[0]) / (navFull[1] - navFull[0])) * 100}%`,
+                          width: `${Math.max(((b.span[1] - b.span[0]) / (navFull[1] - navFull[0])) * 100, 0.4)}%`,
                           background: `${b.col}2e`, borderLeft: `1px solid ${b.col}`, borderRight: `1px solid ${b.col}`,
                         }} />
                       ))}
@@ -1608,12 +1614,12 @@ export default function FleetDataAnalyzer() {
                       ))}
                       <div style={{
                         position: "absolute", top: 0, bottom: 0,
-                        left: `${((activeDomain[0] - fullDomain[0]) / (fullDomain[1] - fullDomain[0])) * 100}%`,
-                        width: `${Math.max(((activeDomain[1] - activeDomain[0]) / (fullDomain[1] - fullDomain[0])) * 100, 0.6)}%`,
+                        left: `${((activeDomain[0] - navFull[0]) / (navFull[1] - navFull[0])) * 100}%`,
+                        width: `${Math.max(((activeDomain[1] - activeDomain[0]) / (navFull[1] - navFull[0])) * 100, 0.6)}%`,
                         background: "rgba(0,153,153,0.10)", border: `1px solid ${C.amber}`, borderRadius: 3, cursor: "grab",
                       }} />
-                      <div style={{ position: "absolute", left: 6, bottom: 2, fontSize: 9, color: C.dim, fontFamily: "'IBM Plex Mono', monospace", pointerEvents: "none" }}>{fmtFull(fullDomain[0])}</div>
-                      <div style={{ position: "absolute", right: 6, bottom: 2, fontSize: 9, color: C.dim, fontFamily: "'IBM Plex Mono', monospace", pointerEvents: "none" }}>{fmtFull(fullDomain[1])}</div>
+                      <div style={{ position: "absolute", left: 6, bottom: 2, fontSize: 9, color: C.dim, fontFamily: "'IBM Plex Mono', monospace", pointerEvents: "none" }}>{fmtFull(navFull[0])}</div>
+                      <div style={{ position: "absolute", right: 6, bottom: 2, fontSize: 9, color: C.dim, fontFamily: "'IBM Plex Mono', monospace", pointerEvents: "none" }}>{fmtFull(navFull[1])}</div>
                     </div>
                   )}
 
@@ -1751,7 +1757,7 @@ export default function FleetDataAnalyzer() {
                           <XAxis dataKey="code" stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} interval={0} angle={-30} textAnchor="end" height={55} />
                           <YAxis stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} allowDecimals={false} width={40} />
                           <Tooltip content={<DarkTooltip />} cursor={{ fill: "rgba(0,0,0,0.05)" }} />
-                          <Bar dataKey="count" onClick={(d) => { toggleVisCode(d.code); setTab("timeline"); }} cursor="pointer" isAnimationActive={false}>
+                          <Bar dataKey="count" onClick={(d) => { const code = d?.code ?? d?.payload?.code; if (code != null) { toggleVisCode(code); setTab("timeline"); } }} cursor="pointer" isAnimationActive={false}>
                             {stats.pareto.slice(0, 12).map((e, i) => (
                               <Cell key={i} fill={visCodes.includes(e.code) ? C.amber : C.red} fillOpacity={0.85} />
                             ))}
