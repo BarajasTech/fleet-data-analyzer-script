@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import * as XLSX from "xlsx";
 import {
   ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ReferenceLine, ReferenceDot, BarChart, Bar, ResponsiveContainer, Cell,
+  ReferenceLine, ReferenceDot, ReferenceArea, BarChart, Bar, ResponsiveContainer, Cell,
 } from "recharts";
 
 /* ============================================================
@@ -37,11 +37,16 @@ const VEH = {
 };
 
 /* ---------------- timestamp parsing ---------------- */
+/* snap timestamps within 2 ms of an exact second (Excel serial float drift, e.g. :22.999 → :23.000) */
+function snapMs(t) {
+  const s = Math.round(t / 1000) * 1000;
+  return Math.abs(t - s) <= 2 ? s : t;
+}
 function parseTs(v) {
   if (v == null || v === "") return null;
-  if (v instanceof Date) { const t = v.getTime(); return isNaN(t) ? null : t; }
+  if (v instanceof Date) { const t = v.getTime(); return isNaN(t) ? null : snapMs(t); }
   if (typeof v === "number") {
-    if (v > 20000 && v < 80000) return Math.round((v - 25569) * 86400000);
+    if (v > 20000 && v < 80000) return snapMs(Math.round((v - 25569) * 86400000));
     if (v > 1e12) return v;
     if (v > 1e9) return v * 1000;
     return null;
@@ -136,11 +141,36 @@ function analyzeRows(rows) {
   const tsGuess = cols.reduce((b, c) => ((scores[c] || 0) > (scores[b] || 0) ? c : b), cols[0]);
   return { cols, numericCols: numeric, textCols: text, tsGuess: (scores[tsGuess] || 0) > 0.4 ? tsGuess : null, timeGuess };
 }
-function defaultSignals(numericCols) {
+function defaultSignals(numericCols, rows) {
+  // check a sample of values so binary flags (0/1) don't fill the analog defaults
+  const isBinary = (c) => {
+    if (!rows?.length) return false;
+    const step = Math.max(1, Math.floor(rows.length / 500));
+    let seen = 0;
+    for (let i = 0; i < rows.length; i += step) {
+      const v = rows[i][c];
+      if (v == null || v === "" || typeof v !== "number") continue;
+      seen++;
+      if (v !== 0 && v !== 1) return false;
+    }
+    return seen > 0;
+  };
   const pri = [/speed/i, /current|amp/i, /volt|_v\b|\(v/i, /press/i, /temp/i, /force/i, /load/i];
   const picked = [];
-  for (const re of pri) for (const c of numericCols) if (re.test(c) && !picked.includes(c)) { picked.push(c); if (picked.length >= 4) return picked; }
-  for (const c of numericCols) { if (!picked.includes(c) && !/record|id|index/i.test(c)) picked.push(c); if (picked.length >= 4) break; }
+  // pass 1: analog channels matching priority names
+  for (const re of pri) for (const c of numericCols) {
+    if (re.test(c) && !picked.includes(c) && !/record|id|index/i.test(c) && !isBinary(c)) {
+      picked.push(c);
+      if (picked.length >= 4) return picked;
+    }
+  }
+  // pass 2: any remaining analog channel
+  for (const c of numericCols) {
+    if (!picked.includes(c) && !/record|id|index/i.test(c) && !isBinary(c)) picked.push(c);
+    if (picked.length >= 4) return picked;
+  }
+  // pass 3: fall back to anything
+  for (const c of numericCols) { if (!picked.includes(c)) picked.push(c); if (picked.length >= 4) break; }
   return picked.slice(0, 4);
 }
 
@@ -277,7 +307,7 @@ function FilePanel({ title, accent, data, setData, kind }) {
       ...base, wb, sheet: name, headerRow, rows,
       cols: det.cols, numericCols: det.numericCols, textCols: det.textCols,
       tsCol: det.tsGuess, timeCol: det.timeGuess && det.timeGuess !== det.tsGuess ? det.timeGuess : null,
-      signals: kind === "rec" ? defaultSignals(det.numericCols) : [],
+      signals: kind === "rec" ? defaultSignals(det.numericCols, rows) : [],
       codeCol: kind === "fault" ? (det.cols.find((c) => /code/i.test(c)) || det.textCols.find((c) => /fault|event|err/i.test(c)) || det.textCols[0] || null) : null,
       descCol: kind === "fault" ? (det.textCols.find((c) => /fault|desc|text|message|name/i.test(c)) || null) : null,
       vehCol: kind === "fault" ? (det.cols.find((c) => /car|veh|unit|train/i.test(c)) || null) : null,
@@ -422,11 +452,12 @@ function FilePanel({ title, accent, data, setData, kind }) {
 }
 
 /* ---------------- tooltip ---------------- */
-const DarkTooltip = ({ active, payload, label }) => {
+const DarkTooltip = ({ active, payload, label, labelMap }) => {
   if (!active || !payload?.length) return null;
+  const realLabel = typeof label === "number" && labelMap ? labelMap(label) : label;
   return (
     <div style={{ background: "#ffffff", border: `1px solid ${C.faint}`, borderRadius: 4, padding: "8px 12px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, maxWidth: 320 }}>
-      <div style={{ color: C.dim, marginBottom: 4 }}>{typeof label === "number" ? fmtFull(label) : label}</div>
+      <div style={{ color: C.dim, marginBottom: 4 }}>{typeof realLabel === "number" ? fmtFull(realLabel) : realLabel}</div>
       {payload.map((p, i) => (
         <div key={i} style={{ color: p.color || C.ink }}>{p.name}: <b>{typeof p.value === "number" ? p.value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : p.value}</b></div>
       ))}
@@ -537,6 +568,80 @@ function FaultLaneDropdown({ allCodes, selected, onChange, label = "⚠ Fault la
   );
 }
 
+/* ---------------- continuous-time mapping (gap compression) ---------------- */
+/* Detects intervals that contain recorder data and builds a piecewise mapping
+   real time <-> virtual time where the gaps between intervals are collapsed
+   to thin visual seams, so traces render continuously. */
+function buildSegments(recDatas) {
+  const ivs = [];
+  for (const rd of recDatas) {
+    if (!rd?.length) continue;
+    // adaptive gap threshold: 25x the median sample interval, min 90 s —
+    // event recorders log sparsely while idle, so only true recording voids count as gaps
+    const dts = [];
+    const step = Math.max(1, Math.floor(rd.length / 500));
+    for (let i = step; i < rd.length; i += step) dts.push(rd[i].t - rd[i - step].t);
+    dts.sort((a, b) => a - b);
+    const med = (dts[Math.floor(dts.length / 2)] || 1000) / step;
+    const thr = Math.max(med * 25, 90000);
+    let a = rd[0].t, prev = rd[0].t;
+    for (let i = 1; i < rd.length; i++) {
+      const t = rd[i].t;
+      if (t - prev > thr) { ivs.push([a, prev]); a = t; }
+      prev = t;
+    }
+    ivs.push([a, prev]);
+  }
+  if (!ivs.length) return [];
+  ivs.sort((x, y) => x[0] - y[0]);
+  const out = [ivs[0].slice()];
+  for (let i = 1; i < ivs.length; i++) {
+    const last = out[out.length - 1];
+    if (ivs[i][0] <= last[1] + 10000) last[1] = Math.max(last[1], ivs[i][1]);
+    else out.push(ivs[i].slice());
+  }
+  return out;
+}
+function buildTimeMap(segs) {
+  if (!segs.length) return null;
+  const total = segs.reduce((a, [x, y]) => a + (y - x), 0) || 1;
+  const pad = Math.max(total * 0.012, 1500); // visual seam width in virtual ms
+  const map = []; const gapsV = [];
+  let v = 0;
+  for (let i = 0; i < segs.length; i++) {
+    const [a, b] = segs[i];
+    map.push({ a, b, vA: v });
+    v += (b - a);
+    if (i < segs.length - 1) { gapsV.push({ v0: v, v1: v + pad, ra: b, rb: segs[i + 1][0] }); v += pad; }
+  }
+  const vEnd = v;
+  const toV = (t) => {
+    if (t <= segs[0][0]) return Math.max(t - segs[0][0], -pad);
+    for (let i = 0; i < map.length; i++) {
+      const m = map[i];
+      if (t <= m.b) {
+        if (t >= m.a) return m.vA + (t - m.a);
+        const g = gapsV[i - 1];
+        return g.v0 + (g.v1 - g.v0) * (t - g.ra) / Math.max(g.rb - g.ra, 1);
+      }
+    }
+    return vEnd + Math.min(t - segs[segs.length - 1][1], pad);
+  };
+  const fromV = (v2) => {
+    if (v2 <= 0) return segs[0][0] + v2;
+    for (let i = 0; i < map.length; i++) {
+      const m = map[i];
+      if (v2 <= m.vA + (m.b - m.a)) {
+        if (v2 >= m.vA) return m.a + (v2 - m.vA);
+        const g = gapsV[i - 1];
+        return g.ra + (g.rb - g.ra) * (v2 - g.v0) / Math.max(g.v1 - g.v0, 1);
+      }
+    }
+    return segs[segs.length - 1][1] + (v2 - vEnd);
+  };
+  return { toV, fromV, vEnd, gapsV, segs };
+}
+
 /* ---------------- processing helpers ---------------- */
 function processRec(rec) {
   if (!rec?.rows?.length || !rec.tsCol) return null;
@@ -603,11 +708,18 @@ function detectBinary(recData, signals) {
 function windowRows(recData, signals, domain, normalize, ranges, prefix) {
   if (!recData || !domain) return [];
   const [a, b] = domain;
-  const inWin = recData.filter((r) => r.t >= a && r.t <= b);
+  // binary search the first in-window sample, then pad one sample past each edge
+  // so lines extend to the chart borders while panning (axis clipping trims the rest)
+  let lo = 0, hiB = recData.length;
+  while (lo < hiB) { const m = (lo + hiB) >> 1; if (recData[m].t < a) lo = m + 1; else hiB = m; }
+  let j = lo;
+  while (j < recData.length && recData[j].t <= b) j++;
+  const start = Math.max(0, lo - 1), end = Math.min(recData.length, j + 1);
+  const inWin = recData.slice(start, end);
   // point budget scales down as more signals are plotted, keeping total points bounded
   const perSeries = Math.max(250, Math.floor(8000 / Math.max(signals.length, 1)));
   const stride = Math.max(1, Math.ceil(inWin.length / perSeries));
-  const sampled = stride === 1 ? inWin : inWin.filter((_, i) => i % stride === 0);
+  const sampled = stride === 1 ? inWin : inWin.filter((_, i) => i % stride === 0 || i === inWin.length - 1);
   return sampled.map((r) => {
     const o = { t: r.t };
     for (const s of signals) {
@@ -634,11 +746,12 @@ export default function FleetDataAnalyzer() {
   const [tab, setTab] = useState("timeline");
   const [viewMode, setViewMode] = useState("combined"); // combined | separate
   const [editOpen, setEditOpen] = useState(false);
-  const [chartCfg, setChartCfg] = useState({ title: "", showLegend: true, showGrid: true, showFaults: true, yMin: "", yMax: "" });
+  const [chartCfg, setChartCfg] = useState({ title: "", showLegend: true, showGrid: true, showFaults: true, yMin: "", yMax: "", faultStyle: "overlay" });
   const [seriesCfg, setSeriesCfg] = useState({}); // per-series style overrides keyed by cfgKey
   const [domain, setDomain] = useState(null);
   const [selFault, setSelFault] = useState(null); // "vi-id"
   const [normalize, setNormalize] = useState(true);
+  const [continuous, setContinuous] = useState(false); // gap-compressed time axis
   const [visCodes, setVisCodes] = useState([]); // fault codes shown on graphs/list; empty = all
   const codeShown = useCallback((c) => !visCodes.length || visCodes.includes(c), [visCodes]);
   const toggleVisCode = (c) => setVisCodes((p) => (p.includes(c) ? p.filter((x) => x !== c) : [...p, c]));
@@ -680,6 +793,13 @@ export default function FleetDataAnalyzer() {
 
   const activeDomain = domain || recSpan || fullDomain;
   const spanMs = activeDomain ? activeDomain[1] - activeDomain[0] : null;
+
+  /* continuous-time mapping: collapse no-data gaps */
+  const segments = useMemo(() => buildSegments([recData1, recData2]), [recData1, recData2]);
+  const tmap = useMemo(() => (continuous && segments.length ? buildTimeMap(segments) : null), [continuous, segments]);
+  const tv = useCallback((t) => (tmap ? tmap.toV(t) : t), [tmap]);
+  const tr = useCallback((v) => (tmap ? tmap.fromV(v) : v), [tmap]);
+  const vActive = activeDomain ? [tv(activeDomain[0]), tv(activeDomain[1])] : null;
 
   /* analog vs digital (0/1) split — digital signals render as logic lanes */
   const binSet1 = useMemo(() => detectBinary(recData1, rec1?.signals || []), [recData1, rec1]);
@@ -902,14 +1022,14 @@ export default function FleetDataAnalyzer() {
 
   const panBy = (frac) => {
     if (!activeDomain) return;
-    const s = activeDomain[1] - activeDomain[0];
-    setDomain(clampDomain(activeDomain[0] + s * frac, activeDomain[1] + s * frac));
+    const v0 = tv(activeDomain[0]), v1 = tv(activeDomain[1]), s = v1 - v0;
+    setDomain(clampDomain(tr(v0 + s * frac), tr(v1 + s * frac)));
   };
   const zoomBy = (factor, anchor = 0.5) => {
     if (!activeDomain) return;
-    const [a, b] = activeDomain;
-    const c = a + (b - a) * anchor, s = (b - a) * factor;
-    setDomain(clampDomain(c - s * anchor, c + s * (1 - anchor)));
+    const v0 = tv(activeDomain[0]), v1 = tv(activeDomain[1]);
+    const c = v0 + (v1 - v0) * anchor, s = (v1 - v0) * factor;
+    setDomain(clampDomain(tr(c - s * anchor), tr(c + s * (1 - anchor))));
   };
 
   useEffect(() => {
@@ -934,7 +1054,7 @@ export default function FleetDataAnalyzer() {
       setBand({ x1: e.clientX - rect.left, x2: e.clientX - rect.left });
       return;
     }
-    dragRef.current = { x: e.clientX, dom: [...activeDomain], w: rect.width };
+    dragRef.current = { x: e.clientX, vdom: [tv(activeDomain[0]), tv(activeDomain[1])], w: rect.width };
   };
   const chartPointerMove = (e) => {
     if (bandRef.current) {
@@ -944,16 +1064,16 @@ export default function FleetDataAnalyzer() {
     }
     const d = dragRef.current;
     if (!d) return;
-    const dt = -((e.clientX - d.x) / d.w) * (d.dom[1] - d.dom[0]);
-    setDomain(clampDomain(d.dom[0] + dt, d.dom[1] + dt));
+    const dvt = -((e.clientX - d.x) / d.w) * (d.vdom[1] - d.vdom[0]);
+    setDomain(clampDomain(tr(d.vdom[0] + dvt), tr(d.vdom[1] + dvt)));
   };
   const chartPointerUp = () => {
     if (bandRef.current) {
       const { rect } = bandRef.current;
       bandRef.current = null;
       if (band && Math.abs(band.x2 - band.x1) > 8 && activeDomain) {
-        const [a, b] = activeDomain, span = b - a;
-        setDomain(clampDomain(a + (band.x1 / rect.width) * span, a + (band.x2 / rect.width) * span));
+        const v0 = tv(activeDomain[0]), v1 = tv(activeDomain[1]), vspan = v1 - v0;
+        setDomain(clampDomain(tr(v0 + (band.x1 / rect.width) * vspan), tr(v0 + (band.x2 / rect.width) * vspan)));
         setSelFault(null);
       }
       setBand(null);
@@ -1020,13 +1140,53 @@ export default function FleetDataAnalyzer() {
     ? [0, 100]
     : [chartCfg.yMin !== "" && !isNaN(+chartCfg.yMin) ? +chartCfg.yMin : "auto", chartCfg.yMax !== "" && !isNaN(+chartCfg.yMax) ? +chartCfg.yMax : "auto"];
 
-  const renderChart = (rows, seriesDefs, faults, height, dots = []) => (
+  const renderChart = (rows, seriesDefs, faults, height, dots = [], coverage = []) => {
+    let prows = tmap ? rows.map((r) => ({ ...r, tReal: r.t, t: tv(r.t) })) : rows;
+    const dom = tmap ? vActive : activeDomain;
+    const showOverlay = chartCfg.showFaults && chartCfg.faultStyle !== "markers";
+    const showMarkers = chartCfg.showFaults && chartCfg.faultStyle !== "overlay";
+    // faults as an additional signal: square pulses on the recorder's time axis
+    let pulseSeries = [];
+    if (showOverlay && faults.length && dom) {
+      let H = 100;
+      if (!normalize) {
+        let mx = -Infinity;
+        for (const r of rows) for (const d of seriesDefs) { const v = r[d.dataKey]; if (v != null && v > mx) mx = v; }
+        H = mx > -Infinity ? mx : 1;
+      }
+      const w = Math.max((dom[1] - dom[0]) / 400, 20); // pulse half-width in axis units
+      const groups = {};
+      for (const f of faults.slice(0, 400)) (groups[f.vi] = groups[f.vi] || []).push(f);
+      const extra = [];
+      pulseSeries = Object.entries(groups).map(([vi, fs]) => {
+        const key = v2Active ? `⚠ FAULTS V${vi}` : "⚠ FAULTS";
+        extra.push({ t: dom[0], [key]: 0 });
+        for (const f of fs.sort((a, b) => a.t - b.t)) {
+          const t = tmap ? tv(f.t) : f.t;
+          extra.push({ t: t - w, [key]: 0 }, { t: t - w + 1, [key]: H }, { t: t + w - 1, [key]: H }, { t: t + w, [key]: 0 });
+        }
+        extra.push({ t: dom[1], [key]: 0 });
+        return { key, color: VEH[+vi].fault };
+      });
+      prows = [...prows, ...extra].sort((a, b) => a.t - b.t);
+    }
+    return (
     <ResponsiveContainer width="100%" height={height}>
-      <ComposedChart data={rows} margin={{ top: 10, right: 20, bottom: 5, left: 0 }}>
+      <ComposedChart data={prows} margin={{ top: 10, right: 20, bottom: 5, left: 0 }}>
         {chartCfg.showGrid && <CartesianGrid stroke={C.faint} strokeDasharray="2 6" vertical={false} />}
-        <XAxis dataKey="t" type="number" domain={activeDomain} tickFormatter={(t) => fmtTime(t, spanMs)} stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} tickCount={7} allowDataOverflow />
-        <YAxis stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} width={52} domain={yDomain} allowDataOverflow={!normalize} />
-        <Tooltip content={<DarkTooltip />} />
+        <XAxis dataKey="t" type="number" domain={dom} tickFormatter={(t) => fmtTime(tr(t), spanMs)} stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} tickCount={7} allowDataOverflow />
+        <YAxis stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} width={52} domain={yDomain} allowDataOverflow={!normalize} padding={{ top: 4, bottom: 8 }} />
+        <Tooltip content={<DarkTooltip labelMap={tr} />} />
+        {coverage.map((c, i) => {
+          if (!c.span || !activeDomain) return null;
+          const x1 = Math.max(c.span[0], activeDomain[0]), x2 = Math.min(c.span[1], activeDomain[1]);
+          if (x2 <= x1) return null;
+          return <ReferenceArea key={`cov${i}`} x1={tv(x1)} x2={tv(x2)} fill={c.color} fillOpacity={0.05} stroke={c.color} strokeOpacity={0.25} strokeDasharray="2 4" />;
+        })}
+        {tmap && tmap.gapsV.map((g, i) => {
+          if (!dom || g.v1 < dom[0] || g.v0 > dom[1]) return null;
+          return <ReferenceArea key={`gap${i}`} x1={Math.max(g.v0, dom[0])} x2={Math.min(g.v1, dom[1])} fill="#9aa3ad" fillOpacity={0.18} stroke="#9aa3ad" strokeOpacity={0.5} strokeDasharray="2 2" />;
+        })}
         {chartCfg.showLegend && <Legend wrapperStyle={{ fontSize: 11, fontFamily: "'IBM Plex Mono', monospace" }} />}
         {seriesDefs.map((d) => {
           const s = resolveSeries(d);
@@ -1036,19 +1196,27 @@ export default function FleetDataAnalyzer() {
             <Line key={d.cfgKey} dataKey={d.dataKey} name={s.label} type={s.curve} stroke={s.color} strokeDasharray={s.dash} strokeWidth={s.width} dot={s.dots ? { r: 2, strokeWidth: 0, fill: s.color } : false} isAnimationActive={false} connectNulls />
           );
         })}
-        {chartCfg.showFaults && faults.slice(0, 250).map((f) => (
-          <ReferenceLine key={`${f.vi}-${f.id}`} x={f.t}
-            stroke={`${f.vi}-${f.id}` === selFault ? C.amber : VEH[f.vi].fault}
-            strokeWidth={`${f.vi}-${f.id}` === selFault ? 2 : 1}
-            strokeDasharray={`${f.vi}-${f.id}` === selFault ? "0" : "4 3"}
-            strokeOpacity={`${f.vi}-${f.id}` === selFault ? 1 : 0.6} />
+        {pulseSeries.map((p) => (
+          <Line key={p.key} dataKey={p.key} name={p.key} type="linear" stroke={p.color} strokeWidth={1.4} dot={false} isAnimationActive={false} connectNulls />
         ))}
+        {chartCfg.showFaults && faults.slice(0, 250).map((f) => {
+          const isSel = `${f.vi}-${f.id}` === selFault;
+          if (!showMarkers && !isSel) return null;
+          return (
+            <ReferenceLine key={`${f.vi}-${f.id}`} x={tv(f.t)}
+              stroke={isSel ? C.amber : VEH[f.vi].fault}
+              strokeWidth={isSel ? 2 : 1}
+              strokeDasharray={isSel ? "0" : "4 3"}
+              strokeOpacity={isSel ? 1 : 0.6} />
+          );
+        })}
         {dots.map((d, i) => (
-          <ReferenceDot key={i} x={d.x} y={d.y} r={4.5} fill={d.color} stroke="#ffffff" strokeWidth={1.5} ifOverflow="discard" isFront />
+          <ReferenceDot key={i} x={tv(d.x)} y={d.y} r={4.5} fill={d.color} stroke="#ffffff" strokeWidth={1.5} ifOverflow="discard" isFront />
         ))}
       </ComposedChart>
     </ResponsiveContainer>
-  );
+    );
+  };
 
   /* ---------- faults rendered as pulse-train signal lanes ---------- */
   const renderFaultLanes = (vi, vName) => {
@@ -1073,7 +1241,7 @@ export default function FleetDataAnalyzer() {
     });
     return (
       <div style={{ border: `1px solid ${C.panelEdge}`, borderTop: "none", overflow: "hidden" }}>
-        {lanes.map((l) => <FaultLane key={l.key} label={l.label} color={l.color} tagColor={v2Active ? VEH[vi].tag : "transparent"} times={l.times} domain={activeDomain} />)}
+        {lanes.map((l) => <FaultLane key={l.key} label={l.label} color={l.color} tagColor={v2Active ? VEH[vi].tag : "transparent"} times={tmap ? l.times.map(tv) : l.times} domain={tmap ? vActive : activeDomain} />)}
       </div>
     );
   };
@@ -1083,7 +1251,9 @@ export default function FleetDataAnalyzer() {
     <div style={{ border: `1px solid ${C.panelEdge}`, borderTop: "none", borderRadius: "0 0 4px 4px", overflow: "hidden", marginBottom: 4 }}>
       {defs.map((d) => {
         const s = resolveSeries(d);
-        return <DigitalLane key={d.cfgKey} label={s.label} color={s.color} tagColor={v2Active ? VEH[vi].tag : "transparent"} pts={lanePts(laneRows, d.sig)} domain={activeDomain} faults={chartCfg.showFaults ? faults : []} selFault={selFault} />;
+        const pts = tmap ? lanePts(laneRows, d.sig).map((p) => ({ ...p, t: tv(p.t) })) : lanePts(laneRows, d.sig);
+        const lfaults = (chartCfg.showFaults ? faults : []).map((f) => (tmap ? { ...f, t: tv(f.t) } : f));
+        return <DigitalLane key={d.cfgKey} label={s.label} color={s.color} tagColor={v2Active ? VEH[vi].tag : "transparent"} pts={pts} domain={tmap ? vActive : activeDomain} faults={lfaults} selFault={selFault} />;
       })}
     </div>
   );
@@ -1227,6 +1397,7 @@ export default function FleetDataAnalyzer() {
                       <Btn small onClick={() => zoomBy(0.5)}>＋</Btn>
                       <Btn small onClick={() => zoomBy(2)}>−</Btn>
                       <Btn small onClick={() => setNormalize(!normalize)}>{normalize ? "Raw values" : "Normalize %"}</Btn>
+                      <Btn small onClick={() => setContinuous(!continuous)}>{continuous ? "Real time" : "Continuous"}</Btn>
                       <Btn small onClick={() => { setDomain(recSpan ? [...recSpan] : null); setSelFault(null); }}>Fit recorder</Btn>
                       <Btn small onClick={() => { setDomain(fullDomain ? [...fullDomain] : null); setSelFault(null); }}>Full range</Btn>
                       <Btn small onClick={() => {
@@ -1311,13 +1482,22 @@ export default function FleetDataAnalyzer() {
                           <input value={chartCfg.yMax} disabled={normalize} onChange={(e) => setChartCfg({ ...chartCfg, yMax: e.target.value })} placeholder="auto"
                             style={{ width: "100%", boxSizing: "border-box", background: normalize ? "#e8e8e3" : "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
                         </div>
+                        <div style={{ flex: "0 0 150px" }}>
+                          <Label>Fault display</Label>
+                          <select value={chartCfg.faultStyle} onChange={(e) => setChartCfg({ ...chartCfg, faultStyle: e.target.value })}
+                            style={{ width: "100%", background: "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 8px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }}>
+                            <option value="overlay">overlay signal</option>
+                            <option value="markers">marker lines</option>
+                            <option value="both">both</option>
+                          </select>
+                        </div>
                         <div style={{ display: "flex", gap: 12, alignItems: "center", paddingBottom: 8 }}>
-                          {[["showLegend", "Legend"], ["showGrid", "Grid"], ["showFaults", "Fault markers"]].map(([k, lbl]) => (
+                          {[["showLegend", "Legend"], ["showGrid", "Grid"], ["showFaults", "Faults"]].map(([k, lbl]) => (
                             <label key={k} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: C.ink, cursor: "pointer", fontFamily: "'IBM Plex Mono', monospace" }}>
                               <input type="checkbox" checked={chartCfg[k]} onChange={(e) => setChartCfg({ ...chartCfg, [k]: e.target.checked })} style={{ accentColor: C.amber }} />{lbl}
                             </label>
                           ))}
-                          <Btn small onClick={() => { setSeriesCfg({}); setChartCfg({ title: "", showLegend: true, showGrid: true, showFaults: true, yMin: "", yMax: "" }); }}>Reset all</Btn>
+                          <Btn small onClick={() => { setSeriesCfg({}); setChartCfg({ title: "", showLegend: true, showGrid: true, showFaults: true, yMin: "", yMax: "", faultStyle: "overlay" }); }}>Reset all</Btn>
                         </div>
                       </div>
                       {normalize && (chartCfg.yMin !== "" || chartCfg.yMax !== "") && <div style={{ fontSize: 10, color: C.dim, marginBottom: 8 }}>Y min/max apply in Raw values mode (normalized view is fixed 0–100%).</div>}
@@ -1364,6 +1544,24 @@ export default function FleetDataAnalyzer() {
                     <div style={{ textAlign: "center", fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 17, letterSpacing: "0.1em", textTransform: "uppercase", color: C.ink, marginBottom: 4 }}>{chartCfg.title}</div>
                   )}
 
+                  {/* warn when recorder data is a sliver of the current window */}
+                  {(() => {
+                    if (!activeDomain || !recSpan) return null;
+                    const win = activeDomain[1] - activeDomain[0];
+                    const ov = Math.max(0, Math.min(recSpan[1], activeDomain[1]) - Math.max(recSpan[0], activeDomain[0]));
+                    const frac = ov / win;
+                    if (frac >= 0.15) return null;
+                    return (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#fdf6e7", border: `1px solid ${C.amber}`, borderRadius: 4, padding: "7px 12px", marginBottom: 8, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", color: C.ink }}>
+                        <span style={{ color: C.amber, fontWeight: 700 }}>⚠</span>
+                        {ov === 0
+                          ? <span>No recorder data in this window — only fault markers are available here. Recorder coverage: {fmtFull(recSpan[0])} → {fmtFull(recSpan[1])}.</span>
+                          : <span>Recorder data covers only {(frac * 100).toFixed(1)}% of this window (shaded band) — signals are compressed to a few pixels.</span>}
+                        <Btn small onClick={() => { setDomain([...recSpan]); setSelFault(null); }}>Fit recorder</Btn>
+                      </div>
+                    );
+                  })()}
+
                   <div ref={chartWrapRef}
                     onPointerDown={chartPointerDown} onPointerMove={chartPointerMove}
                     onPointerUp={chartPointerUp} onPointerLeave={chartPointerUp}
@@ -1373,7 +1571,7 @@ export default function FleetDataAnalyzer() {
                     )}
                     {(!v2Active || viewMode === "combined") ? (
                       <>
-                        {renderChart(combinedRows, combinedSeries, [...visibleFaults1, ...visibleFaults2], combinedSeries.length ? ((laneDefs1.length + laneDefs2.length) ? 300 : 420) : 70, snapDots)}
+                        {renderChart(combinedRows, combinedSeries, [...visibleFaults1, ...visibleFaults2], combinedSeries.length ? ((laneDefs1.length + laneDefs2.length) ? 300 : 420) : 70, snapDots, [{ span: recSpan1, color: VEH[1].tag }, { span: recSpan2, color: VEH[2].tag }])}
                         {renderFaultLanes(1, name1)}
                         {v2Active && renderFaultLanes(2, name2)}
                         {renderLanes(laneDefs1, laneRows1, visibleFaults1, 1)}
@@ -1382,11 +1580,11 @@ export default function FleetDataAnalyzer() {
                     ) : (
                       <>
                         <div style={{ fontSize: 11, color: VEH[1].tag, fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", margin: "2px 0 2px 8px" }}>{name1}</div>
-                        {renderChart(sepRows1, sepSeries1, visibleFaults1, sepSeries1.length ? (laneDefs1.length ? 190 : 240) : 60, snapDots.filter((d) => d.vi === 1))}
+                        {renderChart(sepRows1, sepSeries1, visibleFaults1, sepSeries1.length ? (laneDefs1.length ? 190 : 240) : 60, snapDots.filter((d) => d.vi === 1), [{ span: recSpan1, color: VEH[1].tag }])}
                         {renderFaultLanes(1, name1)}
                         {renderLanes(laneDefs1, laneRows1, visibleFaults1, 1)}
                         <div style={{ fontSize: 11, color: VEH[2].tag, fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", margin: "8px 0 2px 8px" }}>{name2}</div>
-                        {renderChart(sepRows2, sepSeries2, visibleFaults2, sepSeries2.length ? (laneDefs2.length ? 190 : 240) : 60, snapDots.filter((d) => d.vi === 2))}
+                        {renderChart(sepRows2, sepSeries2, visibleFaults2, sepSeries2.length ? (laneDefs2.length ? 190 : 240) : 60, snapDots.filter((d) => d.vi === 2), [{ span: recSpan2, color: VEH[2].tag }])}
                         {renderFaultLanes(2, name2)}
                         {renderLanes(laneDefs2, laneRows2, visibleFaults2, 2)}
                       </>
