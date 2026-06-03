@@ -1,0 +1,4 @@
+# Data files (excluded from repo)
+*.xlsx
+*.xls
+*.csv
