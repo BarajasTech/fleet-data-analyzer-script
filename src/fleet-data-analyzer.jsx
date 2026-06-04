@@ -889,6 +889,24 @@ export default function FleetDataAnalyzer() {
   const [aiInput, setAiInput] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState(null);
+  const [aiKey, setAiKey] = useState("");      // Anthropic API key for self-hosted deployments; memory-only
+  const [aiKeyOpen, setAiKeyOpen] = useState(false);
+  const [aiProvider, setAiProvider] = useState("claude"); // claude | ollama
+  const [ollamaUrl, setOllamaUrl] = useState("http://localhost:11434");
+  const [ollamaModel, setOllamaModel] = useState("llama3.1");
+  const [ollamaModels, setOllamaModels] = useState([]);
+  const listOllamaModels = async () => {
+    try {
+      const res = await fetch(`${ollamaUrl.replace(/\/$/, "")}/api/tags`);
+      const data = await res.json();
+      const names = (data.models || []).map((m) => m.name);
+      setOllamaModels(names);
+      if (names.length && !names.includes(ollamaModel)) setOllamaModel(names[0]);
+      setAiError(names.length ? null : "Connected to Ollama, but no models installed — run e.g. `ollama pull llama3.1`.");
+    } catch (e) {
+      setAiError("Couldn't reach Ollama at " + ollamaUrl + ". Is it running? For a hosted page you must set OLLAMA_ORIGINS (see note below).");
+    }
+  };
 
   /* ----- processed per vehicle ----- */
   const recData1 = useMemo(() => processRec(rec1), [rec1]);
@@ -1222,48 +1240,104 @@ export default function FleetDataAnalyzer() {
     setAiBusy(true); setAiError(null); setAiInput("");
     const history = [...aiMessages, { role: "user", content: question }];
     setAiMessages(history);
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages: [
-            { role: "user", content: [
-              "You are an expert rail vehicle reliability engineer analyzing light-rail vehicle (LRV) fleet diagnostics for a transit operator.",
-              "",
-              "DATA SOURCES:",
-              "- TELOC event recorder: high-rate recordings of vehicle signals (speed, line/inverter voltage, brake cylinder pressures, ATP flags, door circuits). Millisecond resolution; records sparsely while the vehicle is idle.",
-              "- Expert fault log: VCU (Vehicle Control Unit) fault events exported per car — code, description, sometimes speed/odometer/VCU-uptime at occurrence. 1-second timestamp resolution; events are instants.",
-              "- VCU diagnostic memory dump: fault events with Appeared/Disappeared timestamps (durations). 'STILL ACTIVE' means the fault never cleared in the dump.",
-              "",
-              "DOMAIN NOTES:",
-              "- ATP = Automatic Train Protection; an ATP safety brake application forces speed to zero. Safety brake events while already stationary usually reflect door/standstill logic rather than emergency braking.",
-              "- BCU = Brake Control Unit, one per truck (Power Truck A/B, Center Truck C). 'Brakes cutout' = that truck's brakes isolated — degraded braking, often follows a BCU fault.",
-              "- MVB/WTB = train communication buses to the VOBC; bus faults frequently cascade into consequential faults on other subsystems within seconds.",
-              "- Low VCU uptime at a fault (<120s) means the VCU recently restarted — the fault may be a power-up artifact.",
-              "- Door emergency-release and Passenger Emergency Stop events are usually operational/passenger actions, not equipment failures. CCTV/NVR faults are non-safety. Diagnostic-memory 'Environment' entries at fixed times daily are routine housekeeping.",
-              "",
-              "ANALYSIS APPROACH: distinguish root-cause from consequential faults using ordering, durations, and subsystem relationships; treat events in the same second or tight cluster as one incident; correlate fault instants with recorder signal states; flag repeating patterns and systemic issues. Be concise and technical, suitable for an 8D/RCA report. Base everything STRICTLY on the data below — explicitly say when something cannot be determined from it.",
-              "",
-              "DATA:",
-              "",
-              buildAiContext(),
-            ].join("\n") },
-            { role: "assistant", content: "Understood — I will analyze the provided LRV diagnostic data as a rail reliability engineer, based strictly on the data." },
-            ...history,
-          ],
-        }),
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error.message || "API error");
-      const text = (data.content || []).map((c) => (c.type === "text" ? c.text : "")).join("\n").trim();
-      setAiMessages([...history, { role: "assistant", content: text || "(no response)" }]);
-    } catch (e) {
-      setAiError(String(e?.message || e));
-      setAiMessages(history.slice(0, -1));
+    const instruction = [
+      "You are an expert rail vehicle reliability engineer analyzing light-rail vehicle (LRV) fleet diagnostics for a transit operator.",
+      "",
+      "DATA SOURCES:",
+      "- TELOC event recorder: high-rate recordings of vehicle signals (speed, line/inverter voltage, brake cylinder pressures, ATP flags, door circuits). Millisecond resolution; records sparsely while the vehicle is idle.",
+      "- Expert fault log: VCU (Vehicle Control Unit) fault events exported per car — code, description, sometimes speed/odometer/VCU-uptime at occurrence. 1-second timestamp resolution; events are instants.",
+      "- VCU diagnostic memory dump: fault events with Appeared/Disappeared timestamps (durations). 'STILL ACTIVE' means the fault never cleared in the dump.",
+      "",
+      "DOMAIN NOTES:",
+      "- ATP = Automatic Train Protection; an ATP safety brake application forces speed to zero. Safety brake events while already stationary usually reflect door/standstill logic rather than emergency braking.",
+      "- BCU = Brake Control Unit, one per truck (Power Truck A/B, Center Truck C). 'Brakes cutout' = that truck's brakes isolated — degraded braking, often follows a BCU fault.",
+      "- MVB/WTB = train communication buses to the VOBC; bus faults frequently cascade into consequential faults on other subsystems within seconds.",
+      "- Low VCU uptime at a fault (<120s) means the VCU recently restarted — the fault may be a power-up artifact.",
+      "- Door emergency-release and Passenger Emergency Stop events are usually operational/passenger actions, not equipment failures. CCTV/NVR faults are non-safety. Diagnostic-memory 'Environment' entries at fixed times daily are routine housekeeping.",
+      "",
+      "ANALYSIS APPROACH: distinguish root-cause from consequential faults using ordering, durations, and subsystem relationships; treat events in the same second or tight cluster as one incident; correlate fault instants with recorder signal states; flag repeating patterns and systemic issues. Be concise and technical, suitable for an 8D/RCA report. Base everything STRICTLY on the data below — explicitly say when something cannot be determined from it.",
+      "",
+      "DATA:",
+      "",
+      buildAiContext(),
+    ].join("\n");
+
+    /* ---- Ollama (local, free, data stays on your machine) ---- */
+    if (aiProvider === "ollama") {
+      try {
+        const res = await fetch(`${ollamaUrl.replace(/\/$/, "")}/api/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: ollamaModel,
+            stream: false,
+            messages: [{ role: "system", content: instruction }, ...history],
+          }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        const text = (data.message?.content || "").trim();
+        setAiMessages([...history, { role: "assistant", content: text || "(no response)" }]);
+      } catch (e) {
+        const msg = String(e?.message || e);
+        setAiError(/failed to fetch|networkerror|load failed/i.test(msg)
+          ? "Couldn't reach Ollama at " + ollamaUrl + ". Check it's running (`ollama serve`) and that OLLAMA_ORIGINS allows this page's origin."
+          : msg);
+        setAiMessages(history.slice(0, -1));
+        setAiInput(question);
+      }
+      setAiBusy(false);
+      return;
     }
+
+    const payload = JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1000,
+      messages: [
+        { role: "user", content: instruction },
+        { role: "assistant", content: "Understood — I will analyze the provided LRV diagnostic data as a rail reliability engineer, based strictly on the data." },
+        ...history,
+      ],
+    });
+    let lastErr = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        // Inside Claude.ai artifacts no key is needed (platform bridge).
+        // Self-hosted (e.g. GitHub Pages): supply an API key — uses Anthropic's
+        // CORS-enabled direct browser access. The key lives only in memory.
+        const headers = aiKey.trim()
+          ? { "Content-Type": "application/json", "x-api-key": aiKey.trim(), "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }
+          : { "Content-Type": "application/json" };
+        const res = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers,
+          body: payload,
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.message || "API error");
+        const text = (data.content || []).map((c) => (c.type === "text" ? c.text : "")).join("\n").trim();
+        setAiMessages([...history, { role: "assistant", content: text || "(no response)" }]);
+        setAiBusy(false);
+        return;
+      } catch (e) {
+        lastErr = e;
+        // network-level failure: brief pause, then one retry
+        if (attempt === 0 && /fetch|network/i.test(String(e?.message || e))) {
+          await new Promise((r) => setTimeout(r, 1200));
+          continue;
+        }
+        break;
+      }
+    }
+    const msg = String(lastErr?.message || lastErr);
+    setAiError(/failed to fetch|networkerror|load failed/i.test(msg)
+      ? (aiKey.trim()
+        ? "Couldn't reach the Anthropic API (network error, retried once). Check your connection and that the API key is valid, then try again."
+        : "Couldn't reach the AI service. If this app is self-hosted (e.g. GitHub Pages), click 'API key' below and enter an Anthropic API key — the keyless mode only works inside Claude.ai.")
+      : msg);
+    if (!aiKey.trim() && /failed to fetch|networkerror|load failed/i.test(msg)) setAiKeyOpen(true);
+    setAiMessages(history.slice(0, -1));
+    setAiInput(question);
     setAiBusy(false);
   };
 
@@ -1710,8 +1784,8 @@ export default function FleetDataAnalyzer() {
 
           {/* ---------- TIMELINE ---------- */}
           {tab === "timeline" && (
-            <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginTop: 14 }}>
-              <div style={{ flex: "1 1 620px", minWidth: 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 18, marginTop: 14 }}>
+              <div style={{ width: "100%", minWidth: 0 }}>
                 <div style={{ background: C.panel, border: `1px solid ${C.panelEdge}`, borderRadius: 6, padding: 18 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
                     <div style={{ fontSize: 11, color: C.dim }}>
@@ -1988,8 +2062,8 @@ export default function FleetDataAnalyzer() {
                 </div>
               </div>
 
-              {/* fault lists: one per source, side by side */}
-              <div style={{ flex: "1 1 540px", maxWidth: "100%", display: "flex", gap: 14, flexWrap: "wrap", alignSelf: "flex-start" }}>
+              {/* fault lists: one per source, side by side underneath the graph */}
+              <div style={{ width: "100%", display: "flex", gap: 14, flexWrap: "wrap" }}>
                 {[
                   { srcKey: "expert", title: "Expert Fault Log", search: faultSearchE, setSearch: setFaultSearchE, sel: visExpert, clearSel: () => setVisExpert([]), accent: C.red },
                   { srcKey: "vcu", title: "VCU Fault Log", search: faultSearchV, setSearch: setFaultSearchV, sel: visVcu, clearSel: () => setVisVcu([]), accent: C.violet },
@@ -2060,6 +2134,21 @@ export default function FleetDataAnalyzer() {
               {mergedFaults.length > 0 && (
                 <div style={{ background: C.panel, border: `1px solid ${C.panelEdge}`, borderTop: `3px solid ${C.amber}`, borderRadius: 6, padding: 18 }}>
                   <Label>AI analysis — ask about the events</Label>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 10, color: C.dim, letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600 }}>Provider:</span>
+                    <Chip active={aiProvider === "claude"} onClick={() => { setAiProvider("claude"); setAiError(null); }}>Claude API</Chip>
+                    <Chip active={aiProvider === "ollama"} onClick={() => { setAiProvider("ollama"); setAiError(null); }} color={C.green}>Ollama (local, free)</Chip>
+                    {aiProvider === "ollama" && (
+                      <>
+                        <input value={ollamaUrl} onChange={(e) => setOllamaUrl(e.target.value)} placeholder="http://localhost:11434"
+                          style={{ width: 210, background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
+                        <input value={ollamaModel} onChange={(e) => setOllamaModel(e.target.value)} placeholder="model e.g. llama3.1" list="ollama-models"
+                          style={{ width: 150, background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
+                        <datalist id="ollama-models">{ollamaModels.map((m) => <option key={m} value={m} />)}</datalist>
+                        <Btn small onClick={listOllamaModels}>List models</Btn>
+                      </>
+                    )}
+                  </div>
                   {aiMessages.length > 0 && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 340, overflowY: "auto", marginBottom: 10 }}>
                       {aiMessages.map((m, i) => (
@@ -2087,9 +2176,35 @@ export default function FleetDataAnalyzer() {
                       style={{ flex: 1, background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "9px 12px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
                     <Btn small primary disabled={aiBusy || !aiInput.trim()} onClick={() => askAi()}>{aiBusy ? "…" : "Ask"}</Btn>
                   </div>
-                  <div style={{ fontSize: 10, color: C.dim, marginTop: 6, fontFamily: "'IBM Plex Mono', monospace" }}>
-                    The AI sees: per-source fault summaries, events in the current timeline window, and the selected event's signal snapshot. Answers are based only on the loaded data.
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 10, color: C.dim, fontFamily: "'IBM Plex Mono', monospace" }}>
+                      The AI sees: per-source fault summaries, events in the current timeline window, and the selected event's signal snapshot.
+                    </div>
+                    {aiProvider === "claude" ? (
+                      <span onClick={() => setAiKeyOpen(!aiKeyOpen)} style={{ fontSize: 10, color: aiKey ? C.green : C.dim, cursor: "pointer", fontFamily: "'IBM Plex Mono', monospace", textDecoration: "underline", whiteSpace: "nowrap" }}>
+                        {aiKey ? "API key set ✓" : "API key (self-hosted)"}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 10, color: C.dim, fontFamily: "'IBM Plex Mono', monospace", whiteSpace: "nowrap" }}>
+                        data stays on your machine 🔒
+                      </span>
+                    )}
                   </div>
+                  {aiProvider === "ollama" && (
+                    <div style={{ marginTop: 8, background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 4, padding: 10, fontSize: 10, color: C.dim, fontFamily: "'IBM Plex Mono', monospace" }}>
+                      Setup: install Ollama (ollama.com), pull a model (`ollama pull llama3.1` — for this analysis a larger model like qwen2.5:14b or llama3.1:70b answers noticeably better), and allow this page's origin before starting it: `OLLAMA_ORIGINS="https://YOURNAME.github.io" ollama serve` (Windows: set it as an environment variable). Requests go from your browser straight to localhost — nothing leaves your machine.
+                    </div>
+                  )}
+                  {aiProvider === "claude" && aiKeyOpen && (
+                    <div style={{ marginTop: 8, background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 4, padding: 10 }}>
+                      <div style={{ fontSize: 10, color: C.dim, fontFamily: "'IBM Plex Mono', monospace", marginBottom: 6 }}>
+                        Hosting this outside Claude.ai (e.g. GitHub Pages)? Enter an Anthropic API key (console.anthropic.com). It is kept in memory only — never saved, never sent anywhere except api.anthropic.com. Do NOT hardcode it into the source or commit it to the repo.
+                      </div>
+                      <input type="password" value={aiKey} onChange={(e) => setAiKey(e.target.value)} placeholder="sk-ant-…"
+                        autoComplete="off"
+                        style={{ width: "100%", boxSizing: "border-box", background: "#fff", color: C.ink, border: `1px solid ${aiKey ? C.green : C.faint}`, borderRadius: 4, padding: "8px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
+                    </div>
+                  )}
                 </div>
               )}
 
