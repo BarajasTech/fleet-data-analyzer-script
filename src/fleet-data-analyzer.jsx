@@ -454,6 +454,26 @@ function FilePanel({ title, accent, data, setData, kind }) {
   );
 }
 
+/* ---------------- copyable command line ---------------- */
+function CopyCmd({ cmd }) {
+  const [done, setDone] = useState(false);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(cmd); }
+    catch {
+      const ta = document.createElement("textarea");
+      ta.value = cmd; document.body.appendChild(ta); ta.select();
+      document.execCommand("copy"); document.body.removeChild(ta);
+    }
+    setDone(true); setTimeout(() => setDone(false), 1600);
+  };
+  return (
+    <div style={{ display: "flex", gap: 6, alignItems: "stretch", margin: "4px 0" }}>
+      <code style={{ flex: 1, background: "#1d2129", color: "#e8e8e3", borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, overflowX: "auto", whiteSpace: "pre" }}>{cmd}</code>
+      <button onClick={copy} style={{ background: done ? "#0d8a3e" : C.petrol, color: "#fff", border: "none", borderRadius: 4, padding: "0 12px", cursor: "pointer", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, whiteSpace: "nowrap" }}>{done ? "Copied ✓" : "Copy"}</button>
+    </div>
+  );
+}
+
 /* ---------------- VCU data logs panel ---------------- */
 function VcuPanel({ accent, data, setData }) {
   const inputRef = useRef(null);
@@ -895,6 +915,7 @@ export default function FleetDataAnalyzer() {
   const [ollamaUrl, setOllamaUrl] = useState("http://localhost:11434");
   const [ollamaModel, setOllamaModel] = useState("llama3.1");
   const [ollamaModels, setOllamaModels] = useState([]);
+  const [setupOpen, setSetupOpen] = useState(false);
   const listOllamaModels = async () => {
     try {
       const res = await fetch(`${ollamaUrl.replace(/\/$/, "")}/api/tags`);
@@ -2191,8 +2212,38 @@ export default function FleetDataAnalyzer() {
                     )}
                   </div>
                   {aiProvider === "ollama" && (
-                    <div style={{ marginTop: 8, background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 4, padding: 10, fontSize: 10, color: C.dim, fontFamily: "'IBM Plex Mono', monospace" }}>
-                      Setup: install Ollama (ollama.com), pull a model (`ollama pull llama3.1` — for this analysis a larger model like qwen2.5:14b or llama3.1:70b answers noticeably better), and allow this page's origin before starting it: `OLLAMA_ORIGINS="https://YOURNAME.github.io" ollama serve` (Windows: set it as an environment variable). Requests go from your browser straight to localhost — nothing leaves your machine.
+                    <div style={{ marginTop: 8 }}>
+                      <span onClick={() => setSetupOpen(!setupOpen)}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer", color: C.petrol, fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, textDecoration: "underline" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 16, height: 16, borderRadius: "50%", border: `1.5px solid ${C.petrol}`, fontSize: 10, fontWeight: 700, textDecoration: "none" }}>i</span>
+                        {setupOpen ? "Hide setup guide" : "First time? Click here for setup instructions (one-time, ~10 min)"}
+                      </span>
+                      {setupOpen && (
+                        <div style={{ marginTop: 8, background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 4, padding: "12px 14px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: C.ink }}>
+                          <div style={{ fontWeight: 700, marginBottom: 8, color: C.petrol }}>RUN THE AI ON YOUR OWN PC — your data never leaves your machine</div>
+
+                          <div style={{ fontWeight: 600, marginBottom: 2 }}>1 · Install Ollama</div>
+                          <div style={{ color: C.dim, marginBottom: 8 }}>Download and run the installer from <a href="https://ollama.com/download" target="_blank" rel="noreferrer" style={{ color: C.petrol }}>ollama.com/download</a></div>
+
+                          <div style={{ fontWeight: 600, marginBottom: 2 }}>2 · Download a model — open PowerShell (Start menu → type "powershell") and paste:</div>
+                          <CopyCmd cmd="ollama pull gemma4" />
+                          <div style={{ color: C.dim, marginBottom: 8 }}>~5 GB download. PC with 16GB+ RAM? <span style={{ whiteSpace: "nowrap" }}>"ollama pull qwen2.5:14b"</span> answers noticeably better.</div>
+
+                          <div style={{ fontWeight: 600, marginBottom: 2 }}>3 · Allow this site to talk to your Ollama — paste in PowerShell:</div>
+                          <CopyCmd cmd={`[Environment]::SetEnvironmentVariable("OLLAMA_ORIGINS", "${window.location.origin}", "User")`} />
+
+                          <div style={{ fontWeight: 600, marginBottom: 2, marginTop: 8 }}>4 · Restart Ollama</div>
+                          <div style={{ color: C.dim, marginBottom: 8 }}>System tray (bottom-right) → right-click the llama icon → Quit Ollama → relaunch it from the Start menu. Required — the setting only loads at startup.</div>
+
+                          <div style={{ fontWeight: 600, marginBottom: 2 }}>5 · Connect</div>
+                          <div style={{ color: C.dim, marginBottom: 8 }}>Click "List models" above — your model appears automatically. Then ask away. Answers take ~30–60s on a typical laptop.</div>
+
+                          <div style={{ borderTop: `1px solid ${C.faint}`, paddingTop: 8, color: C.dim }}>
+                            Mac: step 3 is <span style={{ whiteSpace: "nowrap" }}>launchctl setenv OLLAMA_ORIGINS "{window.location.origin}"</span> in Terminal, then quit &amp; reopen Ollama.<br/>
+                            Ollama must be running (tray icon) whenever you use the AI. Requests go from your browser straight to localhost — nothing is uploaded anywhere.
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                   {aiProvider === "claude" && aiKeyOpen && (
