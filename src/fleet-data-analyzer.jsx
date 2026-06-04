@@ -317,8 +317,11 @@ function FilePanel({ title, accent, data, setData, kind }) {
   const handleFile = async (file) => {
     setError(null); setBusy(true);
     try {
-      const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { cellDates: true });
+      // CSV/TSV: read as UTF-8 text so headers like "Δt" aren't mangled by codepage guessing
+      const isText = /\.(csv|tsv|txt)$/i.test(file.name);
+      const wb = isText
+        ? XLSX.read(await file.text(), { type: "string", cellDates: true })
+        : XLSX.read(await file.arrayBuffer(), { cellDates: true });
       const sheets = wb.SheetNames;
       let pick = sheets[0], maxR = -1;
       for (const s of sheets) {
@@ -366,7 +369,7 @@ function FilePanel({ title, accent, data, setData, kind }) {
           style={{ border: `1.5px dashed ${C.faint}`, borderRadius: 6, padding: "30px 14px", textAlign: "center", cursor: "pointer", color: C.dim, fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>
           <div style={{ fontSize: 24, marginBottom: 6, color: accent }}>{busy ? "…" : "⬆"}</div>
           {busy ? "Parsing…" : "Drop .xlsx / .xls or click"}
-          <input ref={inputRef} type="file" accept=".xlsx,.xls,.xlsm,.csv" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+          <input ref={inputRef} type="file" accept=".xlsx,.xls,.xlsm,.csv,.tsv,.txt" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -451,6 +454,55 @@ function FilePanel({ title, accent, data, setData, kind }) {
   );
 }
 
+/* ---------------- VCU data logs panel ---------------- */
+function VcuPanel({ accent, data, setData }) {
+  const inputRef = useRef(null);
+  const [error, setError] = useState(null);
+  const handleFile = async (file) => {
+    setError(null);
+    try {
+      const events = parseVcuText(await file.text());
+      if (!events.length) { setError("No diagnostic entries found — expected 'Diagnostic code / Appeared / Disappeared' blocks."); return; }
+      setData({ fileName: file.name, events });
+    } catch (e) { setError("Could not parse file: " + e.message); }
+  };
+  const codes = data ? new Set(data.events.map((e) => e.code)).size : 0;
+  const active = data ? data.events.filter((e) => e.open).length : 0;
+  return (
+    <div style={{ flex: 1, minWidth: 290, background: C.panel, border: `1px solid ${C.panelEdge}`, borderTop: `3px solid ${accent}`, borderRadius: 6, padding: 18 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 17, letterSpacing: "0.1em", textTransform: "uppercase", color: accent }}>VCU Data Logs</div>
+        {data && <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: C.dim }}>{data.events.length} events</div>}
+      </div>
+      {!data ? (
+        <div onClick={() => inputRef.current?.click()}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleFile(f); }}
+          style={{ border: `1.5px dashed ${C.faint}`, borderRadius: 6, padding: "30px 14px", textAlign: "center", cursor: "pointer", color: C.dim, fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>
+          <div style={{ fontSize: 24, marginBottom: 6, color: accent }}>⬆</div>
+          Drop VCU dump (.txt) or click — optional
+          <input ref={inputRef} type="file" accept=".txt,.log,.dat" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: C.ink, background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", display: "flex", justifyContent: "space-between", gap: 8 }}>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📄 {data.fileName}</span>
+            <span style={{ color: C.red, cursor: "pointer" }} onClick={() => setData(null)}>✕</span>
+          </div>
+          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: C.dim }}>
+            {codes} codes · {fmtFull(data.events[0].t)} → {fmtFull(data.events[data.events.length - 1].t)}
+            {active > 0 && <span style={{ color: C.red, fontWeight: 600 }}> · {active} still ACTIVE</span>}
+          </div>
+          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: C.dim }}>
+            VCU faults carry Appeared→Disappeared durations and render as spans in the ⚠ channel.
+          </div>
+        </div>
+      )}
+      {error && <div style={{ marginTop: 10, color: C.red, fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>{error}</div>}
+    </div>
+  );
+}
+
 /* ---------------- tooltip ---------------- */
 const DarkTooltip = ({ active, payload, label, labelMap }) => {
   if (!active || !payload?.length) return null;
@@ -498,21 +550,34 @@ function DigitalLane({ label, color, tagColor, pts, domain, faults, selFault }) 
 }
 
 /* ---------------- fault occurrences as a pulse-train signal lane ---------------- */
-function FaultLane({ label, color, tagColor, times, domain }) {
+function FaultLane({ label, color, tagColor, events, domain }) {
   const [a, b] = domain;
   const W = 1000, H = 30, span = (b - a) || 1;
   const base = H - 6, top = 6, hw = 2;
+  const x = (t) => Math.max(-6, Math.min(W + 6, ((t - a) / span) * W));
+  // union of event intervals (instant events get a min-width pulse; open events run to window end)
+  const ivs = events.map((e) => {
+    const x0 = x(e.t);
+    const x1 = e.open ? W : x(e.tEnd != null ? e.tEnd : e.t);
+    let lo2 = x0 - hw, hi2 = Math.max(x1, x0) + hw;
+    return [lo2, hi2];
+  }).sort((p, q) => p[0] - q[0]);
+  const merged = [];
+  for (const iv of ivs) {
+    const L = merged[merged.length - 1];
+    if (L && iv[0] <= L[1]) L[1] = Math.max(L[1], iv[1]);
+    else merged.push([...iv]);
+  }
   let d = `M0,${base}`;
-  for (const t of times) {
-    const x = ((t - a) / span) * W;
-    if (x < -hw || x > W + hw) continue;
-    d += `L${(x - hw).toFixed(1)},${base}L${(x - hw).toFixed(1)},${top}L${(x + hw).toFixed(1)},${top}L${(x + hw).toFixed(1)},${base}`;
+  for (const [s0, s1] of merged) {
+    if (s1 < 0 || s0 > W) continue;
+    d += `L${s0.toFixed(1)},${base}L${s0.toFixed(1)},${top}L${s1.toFixed(1)},${top}L${s1.toFixed(1)},${base}`;
   }
   d += `L${W},${base}`;
   return (
-    <div className="lane-row" data-label={`${label} ×${times.length}`} data-color={color} style={{ display: "flex", alignItems: "stretch", borderTop: `1px solid ${C.panelEdge}` }}>
-      <div style={{ flex: "0 0 190px", minWidth: 0, fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", color, padding: "0 8px", borderRight: `1px solid ${C.panelEdge}`, borderLeft: `3px solid ${tagColor || "transparent"}`, display: "flex", alignItems: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", background: "#f7f7f4", fontWeight: 600 }} title={`${label} — ${times.length} in window`}>
-        {label}&nbsp;<span style={{ color: C.dim, fontWeight: 400 }}>×{times.length}</span>
+    <div className="lane-row" data-label={`${label} ×${events.length}`} data-color={color} style={{ display: "flex", alignItems: "stretch", borderTop: `1px solid ${C.panelEdge}` }}>
+      <div style={{ flex: "0 0 190px", minWidth: 0, fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", color, padding: "0 8px", borderRight: `1px solid ${C.panelEdge}`, borderLeft: `3px solid ${tagColor || "transparent"}`, display: "flex", alignItems: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", background: "#f7f7f4", fontWeight: 600 }} title={`${label} — ${events.length} in window`}>
+        {label}&nbsp;<span style={{ color: C.dim, fontWeight: 400 }}>×{events.length}</span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ flex: 1, height: 28, display: "block", background: "#ffffff" }}>
         <path d={d} fill="none" stroke={color} strokeWidth={1.3} vectorEffect="non-scaling-stroke" />
@@ -643,6 +708,34 @@ function buildTimeMap(segs) {
   return { toV, fromV, vEnd, gapsV, segs };
 }
 
+/* ---------------- VCU diagnostic-memory text parser ---------------- */
+/* Parses VCU dump text: "Diagnostic code: NNN : desc / Appeared: MM-DD-YYYY hh:mm:ss / Disappeared: ..."
+   Disappeared 00-00-0000 means the fault is still active. Covers main + subsystem sections. */
+function parseVcuText(text) {
+  const events = [];
+  const re = /Diagnostic code:\s*(\d+)\s*:\s*([^\n\r]+)[\r\n]+\s*Appeared\s*:\s*(\d{2})-(\d{2})-(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*[\r\n]+\s*Disappeared\s*:\s*(\d{2})-(\d{2})-(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})/g;
+  let m;
+  while ((m = re.exec(text))) {
+    const t = new Date(+m[5], +m[3] - 1, +m[4], +m[6], +m[7], +m[8]).getTime();
+    if (isNaN(t)) continue;
+    let tEnd = null, open = false;
+    if (m[11] === "0000") open = true;
+    else {
+      tEnd = new Date(+m[11], +m[9] - 1, +m[10], +m[12], +m[13], +m[14]).getTime();
+      if (isNaN(tEnd) || tEnd < t) tEnd = t;
+    }
+    events.push({ t, tEnd, open, code: m[1], desc: m[2].trim() });
+  }
+  events.sort((a, b) => a.t - b.t);
+  return events;
+}
+function fmtDur(ms) {
+  const s = Math.round(ms / 1000);
+  if (s < 90) return s + "s";
+  if (s < 5400) return Math.round(s / 60) + "m";
+  return (s / 3600).toFixed(1) + "h";
+}
+
 /* ---------------- processing helpers ---------------- */
 function processRec(rec) {
   if (!rec?.rows?.length || !rec.tsCol) return null;
@@ -662,6 +755,11 @@ function processRec(rec) {
 }
 function processFault(fault) {
   if (!fault?.rows?.length || !fault.tsCol || !fault.codeCol) return null;
+  // optional operational-context columns common in Expert/VCU exports
+  const spdCol = (fault.cols || []).find((c) => /speed/i.test(c));
+  const upCol = (fault.cols || []).find((c) => /up\s*time/i.test(c));
+  const odoCol = (fault.cols || []).find((c) => /miles|odometer|\bkm\b/i.test(c));
+  const num = (v) => (typeof v === "number" ? v : (v != null && v !== "" && !isNaN(+v) ? +v : null));
   const out = [];
   fault.rows.forEach((r, i) => {
     const t = buildTs(r[fault.tsCol], fault.timeCol ? r[fault.timeCol] : null);
@@ -674,7 +772,15 @@ function processFault(fault) {
       veh = v == null ? null : (typeof v === "number" ? String(Math.round(v)) : String(v));
     }
     if (fault.vehPick && veh !== fault.vehPick) return;
-    out.push({ t, id: i, code: typeof code === "number" ? String(Math.round(code)) : String(code), desc: fault.descCol ? String(r[fault.descCol] ?? "") : "", veh });
+    out.push({
+      t, id: i,
+      code: typeof code === "number" ? String(Math.round(code)) : String(code),
+      desc: fault.descCol ? String(r[fault.descCol] ?? "") : "",
+      veh,
+      spd: spdCol ? num(r[spdCol]) : null,
+      up: upCol ? num(r[upCol]) : null,
+      odo: odoCol ? num(r[odoCol]) : null,
+    });
   });
   out.sort((a, b) => a.t - b.t);
   return out.length ? out : null;
@@ -741,6 +847,8 @@ export default function FleetDataAnalyzer() {
   const [fault1, setFault1] = useState(null);
   const [rec2, setRec2] = useState(null);
   const [fault2, setFault2] = useState(null);
+  const [vcu1, setVcu1] = useState(null);
+  const [vcu2, setVcu2] = useState(null);
   const [name1, setName1] = useState("Vehicle 1");
   const [name2, setName2] = useState("Vehicle 2");
   const [stage, setStage] = useState("setup");
@@ -753,25 +861,51 @@ export default function FleetDataAnalyzer() {
   const [selFault, setSelFault] = useState(null); // "vi-id"
   const [normalize, setNormalize] = useState(true);
   const [continuous, setContinuous] = useState(false); // gap-compressed time axis
-  const [visCodes, setVisCodes] = useState([]); // fault codes shown on graphs/list; empty = all
-  const codeShown = useCallback((c) => !visCodes.length || visCodes.includes(c), [visCodes]);
-  const toggleVisCode = (c) => setVisCodes((p) => (p.includes(c) ? p.filter((x) => x !== c) : [...p, c]));
+  const [visExpert, setVisExpert] = useState([]); // Expert fault codes shown; empty = all Expert faults
+  const [visVcu, setVisVcu] = useState([]);       // VCU fault codes shown; empty = all VCU faults
+  const totalSel = visExpert.length + visVcu.length;
+  const srcShown = useCallback((f) => {
+    const sel = f.src === "vcu" ? visVcu : visExpert;
+    return !sel.length || sel.includes(f.code);
+  }, [visExpert, visVcu]);
+  const clearFaultSel = () => { setVisExpert([]); setVisVcu([]); };
+  /* only explicitly selected codes are drawn on the graph (channel/markers); empty = clean graph */
+  const graphShown = useCallback((f) => (f.src === "vcu" ? visVcu : visExpert).includes(f.code), [visExpert, visVcu]);
+  /* toggle a code in whichever source(s) contain it (used by Pareto/table clicks) */
+  const toggleCode = (code) => {
+    const inExpert = expertCodes.some((p) => p.code === code);
+    const inVcu = vcuCodes.some((p) => p.code === code);
+    if (inExpert) setVisExpert((p) => (p.includes(code) ? p.filter((x) => x !== code) : [...p, code]));
+    if (inVcu) setVisVcu((p) => (p.includes(code) ? p.filter((x) => x !== code) : [...p, code]));
+  };
   const [syncOpen, setSyncOpen] = useState(false);
   const [offset1, setOffset1] = useState(0); // fault-log time offset vs recorder, seconds
   const [offset2, setOffset2] = useState(0);
-  const [faultSearch, setFaultSearch] = useState("");
+  const [faultSearchE, setFaultSearchE] = useState(""); // Expert fault log search
+  const [faultSearchV, setFaultSearchV] = useState(""); // VCU fault log search
   const [statsScope, setStatsScope] = useState("all"); // all | v1 | v2
+  /* AI analysis (Fault Statistics tab) */
+  const [aiMessages, setAiMessages] = useState([]);
+  const [aiInput, setAiInput] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState(null);
 
   /* ----- processed per vehicle ----- */
   const recData1 = useMemo(() => processRec(rec1), [rec1]);
   const recData2 = useMemo(() => processRec(rec2), [rec2]);
-  const shiftFaults = (d, offSec) => {
-    if (!d) return d;
+  /* Expert rows + VCU events merged into one fault stream per vehicle.
+     VCU ids are offset so they never collide with Expert row indexes. */
+  const mergeVehicleFaults = (expert, vcu, offSec) => {
+    const out = [];
+    if (expert) out.push(...expert.map((f) => ({ ...f, src: "expert", tEnd: null, open: false })));
+    if (vcu?.events?.length) out.push(...vcu.events.map((e, i) => ({ t: e.t, tEnd: e.tEnd, open: e.open, id: 1000000 + i, code: e.code, desc: e.desc, veh: null, src: "vcu" })));
+    if (!out.length) return null;
+    out.sort((a, b) => a.t - b.t);
     const o = Math.round(offSec * 1000);
-    return o ? d.map((f) => ({ ...f, t: f.t + o })) : d;
+    return o ? out.map((f) => ({ ...f, t: f.t + o, tEnd: f.tEnd != null ? f.tEnd + o : null })) : out;
   };
-  const faultData1 = useMemo(() => shiftFaults(processFault(fault1), offset1), [fault1, offset1]);
-  const faultData2 = useMemo(() => shiftFaults(processFault(fault2), offset2), [fault2, offset2]);
+  const faultData1 = useMemo(() => mergeVehicleFaults(processFault(fault1), vcu1, offset1), [fault1, vcu1, offset1]);
+  const faultData2 = useMemo(() => mergeVehicleFaults(processFault(fault2), vcu2, offset2), [fault2, vcu2, offset2]);
 
   const v2Active = !!(recData2?.length || faultData2?.length);
 
@@ -882,8 +1016,8 @@ export default function FleetDataAnalyzer() {
     const src = vi === 1 ? faultData1 : faultData2;
     if (!src || !activeDomain) return [];
     const [a, b] = activeDomain;
-    return src.filter((f) => f.t >= a && f.t <= b && codeShown(f.code)).map((f) => ({ ...f, vi }));
-  }, [faultData1, faultData2, activeDomain, codeShown]);
+    return src.filter((f) => { const end = f.open ? Infinity : (f.tEnd ?? f.t); return f.t <= b && end >= a && srcShown(f); }).map((f) => ({ ...f, vi }));
+  }, [faultData1, faultData2, activeDomain, srcShown]);
   const visibleFaults1 = useMemo(() => visFaults(1), [visFaults]);
   const visibleFaults2 = useMemo(() => visFaults(2), [visFaults]);
 
@@ -925,6 +1059,20 @@ export default function FleetDataAnalyzer() {
     }
     return Object.values(byCode).sort((a, b) => b.count - a.count);
   }, [mergedFaults]);
+
+  /* per-source code lists for the two selectors */
+  const codesBySrc = useCallback((src) => {
+    const byCode = {};
+    for (const f of mergedFaults) {
+      if ((f.src || "expert") !== src) continue;
+      if (!byCode[f.code]) byCode[f.code] = { code: f.code, count: 0, desc: f.desc };
+      byCode[f.code].count++;
+      if (!byCode[f.code].desc && f.desc) byCode[f.code].desc = f.desc;
+    }
+    return Object.values(byCode).sort((a, b) => b.count - a.count);
+  }, [mergedFaults]);
+  const expertCodes = useMemo(() => codesBySrc("expert"), [codesBySrc]);
+  const vcuCodes = useMemo(() => codesBySrc("vcu"), [codesBySrc]);
 
   const ready = recData1?.length && faultData1?.length;
 
@@ -975,12 +1123,148 @@ export default function FleetDataAnalyzer() {
   }, [selSnapshot, analog1, analog2, ranges1, ranges2, normalize, seriesColorOf]);
 
   /* step through faults (respecting the Faults-shown selection) */
-  const navList = useMemo(() => mergedFaults.filter((f) => codeShown(f.code)), [mergedFaults, codeShown]);
+  const navList = useMemo(() => mergedFaults.filter((f) => srcShown(f)), [mergedFaults, srcShown]);
   const navFault = (dir) => {
     if (!navList.length) return;
     let idx = selFault ? navList.findIndex((f) => `${f.vi}-${f.id}` === selFault) : -1;
     idx = idx === -1 ? (dir > 0 ? 0 : navList.length - 1) : Math.min(Math.max(idx + dir, 0), navList.length - 1);
     zoomToFault(navList[idx]);
+  };
+
+  /* ----- AI analysis: build a compact data context and query the Anthropic API ----- */
+  const buildAiContext = () => {
+    const L = [];
+    L.push(`Fleet: light-rail vehicles. Vehicle 1: ${name1}${v2Active ? `, Vehicle 2: ${name2}` : ""}.`);
+    if (recSpan) L.push(`TELOC event recorder coverage: ${fmtFull(recSpan[0])} to ${fmtFull(recSpan[1])}. Plotted signals: ${[...(rec1?.signals || []), ...(rec2?.signals || [])].slice(0, 14).join(", ")}.`);
+
+    /* per-source summaries */
+    for (const srcKey of ["expert", "vcu"]) {
+      const evs = mergedFaults.filter((f) => (f.src || "expert") === srcKey);
+      if (!evs.length) continue;
+      const by = {};
+      evs.forEach((f) => { if (!by[f.code]) by[f.code] = { c: 0, d: f.desc }; by[f.code].c++; if (!by[f.code].d) by[f.code].d = f.desc; });
+      const top = Object.entries(by).sort((a, b) => b[1].c - a[1].c).slice(0, 15).map(([k, v]) => `${k} x${v.c} ${v.d}`).join("; ");
+      const spanDays = Math.max((evs[evs.length - 1].t - evs[0].t) / 86400000, 0.04);
+      L.push(`${srcKey === "vcu" ? "VCU diagnostic memory (with Appeared/Disappeared durations)" : "Expert fault log (instantaneous events, 1s resolution)"}: ${evs.length} events across ${Object.keys(by).length} codes, ${fmtFull(evs[0].t)} to ${fmtFull(evs[evs.length - 1].t)} (${(evs.length / spanDays).toFixed(1)}/day). Most frequent: ${top}.`);
+      const active = evs.filter((f) => f.open);
+      if (active.length) L.push(`STILL-ACTIVE (uncleared) VCU faults: ${active.map((f) => `${f.code} ${f.desc} since ${fmtFull(f.t)}`).join("; ")}.`);
+      const longest = evs.filter((f) => f.tEnd != null).sort((a, b) => (b.tEnd - b.t) - (a.tEnd - a.t)).slice(0, 5);
+      if (longest.length && srcKey === "vcu") L.push(`Longest-duration VCU faults: ${longest.map((f) => `${f.code} ${f.desc} ${fmtDur(f.tEnd - f.t)} (${fmtFull(f.t)})`).join("; ")}.`);
+    }
+
+    /* recorder operational stats over the current window */
+    const opsFor = (recD, recCfg, binSet, vn) => {
+      if (!recD?.length || !activeDomain) return;
+      const [a, b] = activeDomain;
+      const rows = recD.filter((r) => r.t >= a && r.t <= b);
+      if (!rows.length) return;
+      const stride = Math.max(1, Math.ceil(rows.length / 2000));
+      const sample = rows.filter((_, i) => i % stride === 0);
+      const sigs = (recCfg?.signals || []).filter((sg) => !binSet.has(sg)).slice(0, 6);
+      const parts = sigs.map((sg) => {
+        let mn = Infinity, mx = -Infinity, sum = 0, n = 0;
+        for (const r of sample) { const v = r[sg]; if (v == null) continue; n++; sum += v; if (v < mn) mn = v; if (v > mx) mx = v; }
+        return n ? `${sg}: min ${mn.toFixed(1)}, max ${mx.toFixed(1)}, avg ${(sum / n).toFixed(1)}` : null;
+      }).filter(Boolean);
+      let motion = "";
+      const spdSig = sigs.find((sg) => /speed/i.test(sg));
+      if (spdSig) {
+        let m = 0, n = 0;
+        for (const r of sample) { const v = r[spdSig]; if (v == null) continue; n++; if (v > 1) m++; }
+        if (n) motion = ` Vehicle in motion ~${Math.round((100 * m) / n)}% of the window.`;
+      }
+      if (parts.length) L.push(`${vn} recorder stats over the current window: ${parts.join("; ")}.${motion}`);
+    };
+    opsFor(recData1, rec1, binSet1, name1);
+    if (v2Active) opsFor(recData2, rec2, binSet2, name2);
+
+    /* window fault detail with operational context */
+    const winF = [...visibleFaults1, ...visibleFaults2].sort((a, b) => a.t - b.t).slice(0, 50);
+    if (winF.length && activeDomain) {
+      L.push(`Faults intersecting the current analysis window ${fmtFull(activeDomain[0])} to ${fmtFull(activeDomain[1])}:\n` +
+        winF.map((f) => `${fmtFull(f.t)} [${f.src === "vcu" ? "VCU" : "EXP"}] ${f.code} ${f.desc}` +
+          (f.tEnd != null ? ` (duration ${fmtDur(f.tEnd - f.t)})` : "") +
+          (f.open ? " (STILL ACTIVE)" : "") +
+          (f.spd != null ? ` @${f.spd.toFixed(0)}mph` : "") +
+          (f.up != null ? ` VCU-uptime ${Math.round(f.up)}s` : "")).join("\n"));
+      /* clusters: events within 120s of each other often share one incident */
+      const clusters = [];
+      let cur = [winF[0]];
+      for (let i = 1; i < winF.length; i++) {
+        if (winF[i].t - cur[cur.length - 1].t <= 120000) cur.push(winF[i]);
+        else { if (cur.length > 1) clusters.push(cur); cur = [winF[i]]; }
+      }
+      if (cur.length > 1) clusters.push(cur);
+      if (clusters.length) L.push(`Fault clusters in window (events within 120s, likely one incident each): ` +
+        clusters.slice(0, 8).map((c) => `${fmtFull(c[0].t)}: ${c.map((f) => f.code).join(" → ")}`).join(" | "));
+    }
+
+    /* selected event deep context */
+    if (selSnapshot?.f) {
+      const f = selSnapshot.f;
+      let sel = `SELECTED EVENT: ${f.code} ${f.desc} at ${fmtFull(f.t)}${f.tEnd != null ? `, cleared after ${fmtDur(f.tEnd - f.t)}` : f.open ? ", STILL ACTIVE" : ""}${f.spd != null ? `, fault-log speed ${f.spd.toFixed(0)}mph` : ""}${f.up != null ? `, VCU uptime ${Math.round(f.up)}s${f.up < 120 ? " (recent VCU restart!)" : ""}` : ""}.`;
+      if (!selSnapshot.outside && selSnapshot.row) {
+        sel += ` Recorder signals at that instant (${(selSnapshot.dt / 1000).toFixed(3)}s sample offset): ` +
+          selSnapshot.rows.filter((r) => r.v != null).slice(0, 24).map((r) => `${r.s}=${r.binary ? (r.v >= 0.5 ? "HIGH" : "LOW") : r.v}`).join(", ") + ".";
+        /* neighbours: faults within ±10 min of the selected event */
+        const near = mergedFaults.filter((x) => Math.abs(x.t - f.t) <= 600000 && x.id !== f.id).slice(0, 12);
+        if (near.length) sel += ` Events within ±10min: ${near.map((x) => `${fmtFull(x.t)} ${x.code} ${x.desc}`).join("; ")}.`;
+      } else sel += " (outside recorder coverage — no signal data at this instant).";
+      L.push(sel);
+    }
+    if (offset1 !== 0 || offset2 !== 0) L.push(`Time-sync offsets applied to fault timestamps: V1 ${offset1}s, V2 ${offset2}s.`);
+    return L.join("\n\n").slice(0, 12000);
+  };
+
+  const askAi = async (q) => {
+    const question = (q ?? aiInput).trim();
+    if (!question || aiBusy) return;
+    setAiBusy(true); setAiError(null); setAiInput("");
+    const history = [...aiMessages, { role: "user", content: question }];
+    setAiMessages(history);
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          messages: [
+            { role: "user", content: [
+              "You are an expert rail vehicle reliability engineer analyzing light-rail vehicle (LRV) fleet diagnostics for a transit operator.",
+              "",
+              "DATA SOURCES:",
+              "- TELOC event recorder: high-rate recordings of vehicle signals (speed, line/inverter voltage, brake cylinder pressures, ATP flags, door circuits). Millisecond resolution; records sparsely while the vehicle is idle.",
+              "- Expert fault log: VCU (Vehicle Control Unit) fault events exported per car — code, description, sometimes speed/odometer/VCU-uptime at occurrence. 1-second timestamp resolution; events are instants.",
+              "- VCU diagnostic memory dump: fault events with Appeared/Disappeared timestamps (durations). 'STILL ACTIVE' means the fault never cleared in the dump.",
+              "",
+              "DOMAIN NOTES:",
+              "- ATP = Automatic Train Protection; an ATP safety brake application forces speed to zero. Safety brake events while already stationary usually reflect door/standstill logic rather than emergency braking.",
+              "- BCU = Brake Control Unit, one per truck (Power Truck A/B, Center Truck C). 'Brakes cutout' = that truck's brakes isolated — degraded braking, often follows a BCU fault.",
+              "- MVB/WTB = train communication buses to the VOBC; bus faults frequently cascade into consequential faults on other subsystems within seconds.",
+              "- Low VCU uptime at a fault (<120s) means the VCU recently restarted — the fault may be a power-up artifact.",
+              "- Door emergency-release and Passenger Emergency Stop events are usually operational/passenger actions, not equipment failures. CCTV/NVR faults are non-safety. Diagnostic-memory 'Environment' entries at fixed times daily are routine housekeeping.",
+              "",
+              "ANALYSIS APPROACH: distinguish root-cause from consequential faults using ordering, durations, and subsystem relationships; treat events in the same second or tight cluster as one incident; correlate fault instants with recorder signal states; flag repeating patterns and systemic issues. Be concise and technical, suitable for an 8D/RCA report. Base everything STRICTLY on the data below — explicitly say when something cannot be determined from it.",
+              "",
+              "DATA:",
+              "",
+              buildAiContext(),
+            ].join("\n") },
+            { role: "assistant", content: "Understood — I will analyze the provided LRV diagnostic data as a rail reliability engineer, based strictly on the data." },
+            ...history,
+          ],
+        }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message || "API error");
+      const text = (data.content || []).map((c) => (c.type === "text" ? c.text : "")).join("\n").trim();
+      setAiMessages([...history, { role: "assistant", content: text || "(no response)" }]);
+    } catch (e) {
+      setAiError(String(e?.message || e));
+      setAiMessages(history.slice(0, -1));
+    }
+    setAiBusy(false);
   };
 
   /* ----- pan / zoom / scroll ----- */
@@ -1149,10 +1433,12 @@ export default function FleetDataAnalyzer() {
     const dom = tmap ? vActive : activeDomain;
     const showOverlay = chartCfg.showFaults && chartCfg.faultStyle !== "markers";
     const showMarkers = chartCfg.showFaults && chartCfg.faultStyle !== "overlay";
+    // graph shows only selected fault codes; the clicked/selected fault is always highlighted
+    const gFaults = totalSel ? faults.filter(graphShown) : [];
     // Expert/fault data as a discrete channel laid on top of the recorder data:
     // a logic-style band near the top of the plot (low = no fault, high pulse = fault logged)
     let pulseSeries = [];
-    if (showOverlay && faults.length && dom) {
+    if (showOverlay && gFaults.length && dom) {
       let H = 100;
       if (!normalize) {
         let mx = -Infinity;
@@ -1162,15 +1448,27 @@ export default function FleetDataAnalyzer() {
       const bands = { 1: [0.875, 0.985], 2: [0.73, 0.84] }; // per-vehicle band as fraction of scale
       const w = Math.max((dom[1] - dom[0]) / 400, 20); // pulse half-width in axis units
       const groups = {};
-      for (const f of faults.slice(0, 400)) (groups[f.vi] = groups[f.vi] || []).push(f);
+      for (const f of gFaults.slice(0, 400)) (groups[f.vi] = groups[f.vi] || []).push(f);
       const extra = [];
+      const X = (t) => (tmap ? tv(t) : t);
       pulseSeries = Object.entries(groups).map(([vi, fs]) => {
         const key = v2Active ? `⚠ FAULTS V${vi}` : "⚠ FAULTS";
         const lo = +(H * bands[vi][0]).toFixed(3), hi = +(H * bands[vi][1]).toFixed(3);
+        // spans: Expert events are instants; VCU events run Appeared→Disappeared (open = still active)
+        const ivs = fs.map((f) => {
+          const t0 = X(f.t);
+          const t1 = f.open ? dom[1] : (f.tEnd != null ? X(f.tEnd) : t0);
+          return [t0 - w, Math.max(t1, t0) + w];
+        }).sort((p, q) => p[0] - q[0]);
+        const merged = [];
+        for (const iv of ivs) {
+          const L = merged[merged.length - 1];
+          if (L && iv[0] <= L[1]) L[1] = Math.max(L[1], iv[1]);
+          else merged.push([...iv]);
+        }
         extra.push({ t: dom[0], [key]: lo });
-        for (const f of fs.sort((a, b) => a.t - b.t)) {
-          const t = tmap ? tv(f.t) : f.t;
-          extra.push({ t: t - w, [key]: lo }, { t: t - w + 1, [key]: hi }, { t: t + w - 1, [key]: hi }, { t: t + w, [key]: lo });
+        for (const [s0, s1] of merged) {
+          extra.push({ t: s0, [key]: lo }, { t: s0 + 1, [key]: hi }, { t: s1 - 1, [key]: hi }, { t: s1, [key]: lo });
         }
         extra.push({ t: dom[1], [key]: lo });
         return { key, color: VEH[+vi].fault };
@@ -1208,7 +1506,7 @@ export default function FleetDataAnalyzer() {
         ))}
         {chartCfg.showFaults && faults.slice(0, 250).map((f) => {
           const isSel = `${f.vi}-${f.id}` === selFault;
-          if (!showMarkers && !isSel) return null;
+          if (isSel ? false : !(showMarkers && totalSel && graphShown(f))) return null;
           return (
             <ReferenceLine key={`${f.vi}-${f.id}`} x={tv(f.t)}
               stroke={isSel ? C.amber : VEH[f.vi].fault}
@@ -1230,26 +1528,46 @@ export default function FleetDataAnalyzer() {
     const src = vi === 1 ? faultData1 : faultData2;
     if (!src?.length || !activeDomain) return null;
     const [a, b] = activeDomain;
-    const inWin = (arr) => arr.filter((f) => f.t >= a - (b - a) * 0.01 && f.t <= b + (b - a) * 0.01);
-    const lanes = [{
-      key: "sum",
-      label: `⚠ FAULTS · ${vName}${visCodes.length ? ` · ${visCodes.length} code${visCodes.length > 1 ? "s" : ""}` : " · all"}`,
-      color: VEH[vi].fault,
-      times: inWin(src.filter((f) => codeShown(f.code))).map((f) => f.t),
-    }];
-    const laneCodes = visCodes.length && visCodes.length <= 16 ? visCodes : [];
-    laneCodes.forEach((code, i) => {
-      const meta = allCodes.find((p) => p.code === code);
+    const slack = (b - a) * 0.01;
+    const inWin = (arr) => arr.filter((f) => {
+      const end = f.open ? Infinity : (f.tEnd ?? f.t);
+      return f.t <= b + slack && end >= a - slack;
+    });
+    const toEvents = (arr) => arr.map((f) => (tmap
+      ? { t: tv(f.t), tEnd: f.tEnd != null ? tv(f.tEnd) : null, open: f.open }
+      : { t: f.t, tEnd: f.tEnd, open: f.open }));
+    // lanes only for explicitly selected codes (the ⚠ channel in the chart covers "all")
+    const lanes = [];
+    const sel = [
+      ...visExpert.map((code) => ({ code, src: "expert" })),
+      ...visVcu.map((code) => ({ code, src: "vcu" })),
+    ].slice(0, 400);
+    // pre-group events by source+code once, so hundreds of lanes stay fast while panning
+    const byKey = {};
+    for (const f of src) { const k = (f.src || "expert") + "-" + f.code; (byKey[k] = byKey[k] || []).push(f); }
+    sel.forEach(({ code, src: fsrc }, i) => {
+      const pool = fsrc === "vcu" ? vcuCodes : expertCodes;
+      const meta = pool.find((p) => p.code === code);
       lanes.push({
-        key: code,
-        label: `${code}${meta?.desc ? ` ${meta.desc}` : ""} · ${vName}`,
+        key: `${fsrc}-${code}`,
+        label: `${code}${meta?.desc ? ` ${meta.desc}` : ""}${fsrc === "vcu" ? " [VCU]" : ""} · ${vName}`,
         color: SIG_COLORS[(i + 4) % SIG_COLORS.length],
-        times: inWin(src.filter((f) => f.code === code)).map((f) => f.t),
+        events: toEvents(inWin(byKey[`${fsrc}-${code}`] || [])),
       });
     });
+    if (!lanes.length) return null;
+    const scrollable = lanes.length > 10;
     return (
       <div style={{ border: `1px solid ${C.panelEdge}`, borderTop: "none", overflow: "hidden" }}>
-        {lanes.map((l) => <FaultLane key={l.key} label={l.label} color={l.color} tagColor={v2Active ? VEH[vi].tag : "transparent"} times={tmap ? l.times.map(tv) : l.times} domain={tmap ? vActive : activeDomain} />)}
+        {scrollable && (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 10px", background: "#f3f3f0", borderBottom: `1px solid ${C.panelEdge}`, fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: C.dim }}>
+            <span>Fault lanes · {vName} ({lanes.length})</span>
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace", textTransform: "none", letterSpacing: 0, fontWeight: 400, fontSize: 9 }}>scroll for more ↓</span>
+          </div>
+        )}
+        <div style={{ maxHeight: scrollable ? 320 : undefined, overflowY: scrollable ? "auto" : undefined }}>
+          {lanes.map((l) => <FaultLane key={l.key} label={l.label} color={l.color} tagColor={v2Active ? VEH[vi].tag : "transparent"} events={l.events} domain={tmap ? vActive : activeDomain} />)}
+        </div>
       </div>
     );
   };
@@ -1321,7 +1639,7 @@ export default function FleetDataAnalyzer() {
           <div style={{ fontSize: 11, color: C.dim, letterSpacing: "0.05em" }}>Event recorder × fault log correlation · up to 2 vehicles</div>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
-          {stage === "analyze" && <Btn small onClick={() => { setStage("setup"); setDomain(null); setSelFault(null); setVisCodes([]); }}>⟵ Data setup</Btn>}
+          {stage === "analyze" && <Btn small onClick={() => { setStage("setup"); setDomain(null); setSelFault(null); clearFaultSel(); }}>⟵ Data setup</Btn>}
           {stage === "setup" && <Btn small onClick={loadDemo}>Load demo (2 vehicles)</Btn>}
         </div>
       </div>
@@ -1330,8 +1648,8 @@ export default function FleetDataAnalyzer() {
       {stage === "setup" && (
         <div style={{ padding: 28, maxWidth: 1200, margin: "0 auto" }}>
           {[
-            { n: 1, name: name1, setName: setName1, rec: rec1, setRec: setRec1, fault: fault1, setFault: setFault1, required: true },
-            { n: 2, name: name2, setName: setName2, rec: rec2, setRec: setRec2, fault: fault2, setFault: setFault2, required: false },
+            { n: 1, name: name1, setName: setName1, rec: rec1, setRec: setRec1, fault: fault1, setFault: setFault1, vcu: vcu1, setVcu: setVcu1, required: true },
+            { n: 2, name: name2, setName: setName2, rec: rec2, setRec: setRec2, fault: fault2, setFault: setFault2, vcu: vcu2, setVcu: setVcu2, required: false },
           ].map((v) => (
             <div key={v.n} style={{ marginBottom: 26 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
@@ -1342,13 +1660,14 @@ export default function FleetDataAnalyzer() {
               </div>
               <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
                 <FilePanel title="Event Recorder" accent={VEH[v.n].tag} data={v.rec} setData={v.setRec} kind="rec" />
-                <FilePanel title="Fault Log" accent={VEH[v.n].fault} data={v.fault} setData={v.setFault} kind="fault" />
+                <FilePanel title="Expert Data Logs" accent={VEH[v.n].fault} data={v.fault} setData={v.setFault} kind="fault" />
+                <VcuPanel accent={C.violet} data={v.vcu} setData={v.setVcu} />
               </div>
             </div>
           ))}
           <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
             <Btn primary disabled={!ready || !rec1?.signals?.length} onClick={() => setStage("analyze")}>Analyze ▶</Btn>
-            {!ready && <span style={{ color: C.dim, fontSize: 12 }}>Vehicle 1 needs both files. If one export contains multiple cars, use "Filter to vehicle" to split it across the two slots.</span>}
+            {!ready && <span style={{ color: C.dim, fontSize: 12 }}>Vehicle 1 needs the Event Recorder plus at least one fault source (Expert Data or VCU Data Logs). If one export contains multiple cars, use "Filter to vehicle" to split it.</span>}
             {ready && !rec1?.signals?.length ? <span style={{ color: C.red, fontSize: 12 }}>Select at least one signal channel for Vehicle 1.</span> : null}
           </div>
         </div>
@@ -1378,7 +1697,8 @@ export default function FleetDataAnalyzer() {
                   <Chip active={viewMode === "separate"} onClick={() => setViewMode("separate")}>2 graphs</Chip>
                 </div>
               )}
-              <FaultLaneDropdown allCodes={allCodes} selected={visCodes} onChange={setVisCodes} label="⚠ Faults" emptyMeansAll hint="Empty = all faults in the ⚠ channel. Pick codes to filter to them — each picked code also gets its own lane (up to 16)." />
+              {expertCodes.length > 0 && <FaultLaneDropdown allCodes={expertCodes} selected={visExpert} onChange={setVisExpert} label="Expert faults" hint="Pick codes to draw them on the graph (⚠ channel + a lane per code). Nothing selected = clean graph; all faults stay in the list." />}
+              {vcuCodes.length > 0 && <FaultLaneDropdown allCodes={vcuCodes} selected={visVcu} onChange={setVisVcu} label="VCU faults" color={C.violet} hint="Pick codes to draw them on the graph as duration spans (⚠ channel + a lane per code). Nothing selected = clean graph." />}
               {recData1?.length > 0 && rec1 && (
                 <SignalDropdown label={v2Active ? `${name1} sig` : "Signals"} color={VEH[1].tag} allSignals={rec1.numericCols} selected={rec1.signals} onChange={(s) => setRec1({ ...rec1, signals: s })} />
               )}
@@ -1396,7 +1716,7 @@ export default function FleetDataAnalyzer() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
                     <div style={{ fontSize: 11, color: C.dim }}>
                       {fmtFull(activeDomain[0])} → {fmtFull(activeDomain[1])} · {visibleFaults1.length + visibleFaults2.length} fault{visibleFaults1.length + visibleFaults2.length !== 1 ? "s" : ""} in window
-                      {visCodes.length > 0 && <span style={{ color: C.amber }}> · showing {visCodes.length} code{visCodes.length > 1 ? "s" : ""} <span style={{ cursor: "pointer" }} onClick={() => setVisCodes([])}>✕</span></span>}
+                      {totalSel > 0 && <span style={{ color: C.amber }}> · graphing {totalSel} fault code{totalSel > 1 ? "s" : ""} <span style={{ cursor: "pointer" }} onClick={clearFaultSel}>✕</span></span>}
                     </div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       <Btn small onClick={() => panBy(-0.5)}>◀</Btn>
@@ -1668,52 +1988,59 @@ export default function FleetDataAnalyzer() {
                 </div>
               </div>
 
-              {/* fault list */}
-              <div style={{ flex: "0 0 340px", maxWidth: "100%" }}>
-                <div style={{ background: C.panel, border: `1px solid ${C.panelEdge}`, borderRadius: 6, padding: 14, maxHeight: v2Active && viewMode === "separate" ? 620 : 540, display: "flex", flexDirection: "column" }}>
-                  {(() => {
-                    const q = faultSearch.trim().toLowerCase();
-                    const listFaults = mergedFaults.filter((f) =>
-                      codeShown(f.code) &&
-                      (!q || f.code.toLowerCase().includes(q) || f.desc.toLowerCase().includes(q) || (f.veh || "").toLowerCase().includes(q) || fmtFull(f.t).includes(q) || (f.vi === 1 ? name1 : name2).toLowerCase().includes(q))
-                    );
-                    return (
-                      <>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                          <Label>Fault log ({listFaults.length}{listFaults.length !== mergedFaults.length ? ` of ${mergedFaults.length}` : ""})</Label>
-                          {(visCodes.length > 0 || q) && <span onClick={() => { setVisCodes([]); setFaultSearch(""); }} style={{ color: C.amber, fontSize: 11, cursor: "pointer" }}>clear ✕</span>}
-                        </div>
-                        <input value={faultSearch} onChange={(e) => setFaultSearch(e.target.value)} placeholder="Search faults… code, description, car, time"
-                          style={{ width: "100%", boxSizing: "border-box", background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none", marginBottom: 8 }} />
-                        <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
-                          {listFaults.slice(0, 800).map((f) => {
-                            const key = `${f.vi}-${f.id}`;
-                            const span = f.vi === 1 ? recSpan1 : recSpan2;
-                            const inRec = span && f.t >= span[0] && f.t <= span[1];
-                            return (
-                              <div key={key} onClick={() => zoomToFault(f)}
-                                style={{
-                                  padding: "8px 10px", borderRadius: 4, cursor: "pointer",
-                                  background: key === selFault ? "#e3f3f3" : "#f3f3f0",
-                                  border: `1px solid ${key === selFault ? C.amber : C.faint}`,
-                                  borderLeft: `3px solid ${VEH[f.vi].tag}`,
-                                  opacity: inRec ? 1 : 0.55,
-                                }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                                  <span style={{ color: VEH[f.vi].fault, fontWeight: 600, fontSize: 12 }}>{f.code}<span style={{ color: VEH[f.vi].tag, fontWeight: 400 }}> · {f.vi === 1 ? name1 : name2}{f.veh ? ` (${f.veh})` : ""}</span></span>
-                                  <span style={{ color: C.dim, fontSize: 10 }}>{fmtFull(f.t)}</span>
-                                </div>
-                                {f.desc && <div style={{ color: C.ink, fontSize: 11, marginTop: 2 }}>{f.desc}</div>}
-                                {!inRec && <div style={{ color: C.dim, fontSize: 9, marginTop: 2 }}>outside recorder window</div>}
+              {/* fault lists: one per source, side by side */}
+              <div style={{ flex: "1 1 540px", maxWidth: "100%", display: "flex", gap: 14, flexWrap: "wrap", alignSelf: "flex-start" }}>
+                {[
+                  { srcKey: "expert", title: "Expert Fault Log", search: faultSearchE, setSearch: setFaultSearchE, sel: visExpert, clearSel: () => setVisExpert([]), accent: C.red },
+                  { srcKey: "vcu", title: "VCU Fault Log", search: faultSearchV, setSearch: setFaultSearchV, sel: visVcu, clearSel: () => setVisVcu([]), accent: C.violet },
+                ].map(({ srcKey, title, search, setSearch, sel, clearSel, accent }) => {
+                  const all = mergedFaults.filter((f) => (f.src || "expert") === srcKey);
+                  if (!all.length) return null;
+                  const q = search.trim().toLowerCase();
+                  const listFaults = all.filter((f) =>
+                    srcShown(f) &&
+                    (!q || f.code.toLowerCase().includes(q) || f.desc.toLowerCase().includes(q) || (f.veh || "").toLowerCase().includes(q) || fmtFull(f.t).includes(q) || (f.vi === 1 ? name1 : name2).toLowerCase().includes(q))
+                  );
+                  return (
+                    <div key={srcKey} style={{ flex: "1 1 250px", minWidth: 250, background: C.panel, border: `1px solid ${C.panelEdge}`, borderTop: `3px solid ${accent}`, borderRadius: 6, padding: 14, maxHeight: 420, display: "flex", flexDirection: "column" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <Label>{title} ({listFaults.length}{listFaults.length !== all.length ? ` of ${all.length}` : ""})</Label>
+                        {(sel.length > 0 || q) && <span onClick={() => { clearSel(); setSearch(""); }} style={{ color: C.amber, fontSize: 11, cursor: "pointer" }}>clear ✕</span>}
+                      </div>
+                      <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${srcKey === "vcu" ? "VCU" : "Expert"} faults… code, description, time`}
+                        style={{ width: "100%", boxSizing: "border-box", background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none", marginBottom: 8 }} />
+                      <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+                        {listFaults.slice(0, 800).map((f) => {
+                          const key = `${f.vi}-${f.id}`;
+                          const span = f.vi === 1 ? recSpan1 : recSpan2;
+                          const inRec = span && f.t >= span[0] && f.t <= span[1];
+                          return (
+                            <div key={key} onClick={() => zoomToFault(f)}
+                              style={{
+                                padding: "8px 10px", borderRadius: 4, cursor: "pointer",
+                                background: key === selFault ? "#e3f3f3" : "#f3f3f0",
+                                border: `1px solid ${key === selFault ? C.amber : C.faint}`,
+                                borderLeft: `3px solid ${VEH[f.vi].tag}`,
+                                opacity: inRec ? 1 : 0.55,
+                              }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                                <span style={{ color: VEH[f.vi].fault, fontWeight: 600, fontSize: 12 }}>
+                                  {f.code}
+                                  <span style={{ color: VEH[f.vi].tag, fontWeight: 400 }}> · {f.vi === 1 ? name1 : name2}{f.veh ? ` (${f.veh})` : ""}</span>
+                                  {f.open && <span style={{ color: "#fff", background: C.red, borderRadius: 2, fontSize: 8, fontWeight: 700, padding: "1px 4px", marginLeft: 4, verticalAlign: "1px", letterSpacing: "0.06em" }}>ACTIVE</span>}
+                                </span>
+                                <span style={{ color: C.dim, fontSize: 10 }}>{fmtFull(f.t)}{f.tEnd != null ? ` · ${fmtDur(f.tEnd - f.t)}` : ""}</span>
                               </div>
-                            );
-                          })}
-                          {!listFaults.length && <div style={{ color: C.dim, fontSize: 11, padding: 8 }}>No faults match the current search/code selection.</div>}
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
+                              {f.desc && <div style={{ color: C.ink, fontSize: 11, marginTop: 2 }}>{f.desc}</div>}
+                              {!inRec && <div style={{ color: C.dim, fontSize: 9, marginTop: 2 }}>outside recorder window</div>}
+                            </div>
+                          );
+                        })}
+                        {!listFaults.length && <div style={{ color: C.dim, fontSize: 11, padding: 8 }}>No {srcKey === "vcu" ? "VCU" : "Expert"} faults match the current search/code selection.</div>}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1729,6 +2056,43 @@ export default function FleetDataAnalyzer() {
                   <Chip active={statsScope === "v2"} onClick={() => setStatsScope("v2")} color={VEH[2].tag}>{name2}</Chip>
                 </div>
               )}
+              {/* ---------- AI analysis ---------- */}
+              {mergedFaults.length > 0 && (
+                <div style={{ background: C.panel, border: `1px solid ${C.panelEdge}`, borderTop: `3px solid ${C.amber}`, borderRadius: 6, padding: 18 }}>
+                  <Label>AI analysis — ask about the events</Label>
+                  {aiMessages.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 340, overflowY: "auto", marginBottom: 10 }}>
+                      {aiMessages.map((m, i) => (
+                        <div key={i} style={{
+                          alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "85%",
+                          background: m.role === "user" ? "#e3f3f3" : "#f3f3f0",
+                          border: `1px solid ${m.role === "user" ? C.amber : C.panelEdge}`,
+                          borderRadius: 6, padding: "8px 12px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: C.ink, whiteSpace: "pre-wrap",
+                        }}>{m.content}</div>
+                      ))}
+                      {aiBusy && <div style={{ alignSelf: "flex-start", color: C.dim, fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>Analyzing…</div>}
+                    </div>
+                  )}
+                  {aiError && <div style={{ color: C.red, fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, marginBottom: 8 }}>Error: {aiError}</div>}
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                    <Chip onClick={() => askAi("Summarize the fault history: dominant failure modes, notable sequences, and anything that looks systemic.")}>Summarize all faults</Chip>
+                    <Chip onClick={() => askAi("What happened during the selected event? Walk through the fault, the signal states at that instant, and likely related events around it.")} color={selFault ? C.amber : undefined}>What happened during this event?</Chip>
+                    <Chip onClick={() => askAi("Are there patterns by time of day, repeated sequences of codes, or faults that tend to occur together?")}>Find patterns</Chip>
+                    {aiMessages.length > 0 && <Chip onClick={() => { setAiMessages([]); setAiError(null); }}>Clear chat</Chip>}
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input value={aiInput} onChange={(e) => setAiInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") askAi(); }}
+                      placeholder={selFault ? "Ask about the selected event or the fault history…" : "Ask anything about the fault data… (select an event on the Timeline for event-specific answers)"}
+                      style={{ flex: 1, background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "9px 12px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
+                    <Btn small primary disabled={aiBusy || !aiInput.trim()} onClick={() => askAi()}>{aiBusy ? "…" : "Ask"}</Btn>
+                  </div>
+                  <div style={{ fontSize: 10, color: C.dim, marginTop: 6, fontFamily: "'IBM Plex Mono', monospace" }}>
+                    The AI sees: per-source fault summaries, events in the current timeline window, and the selected event's signal snapshot. Answers are based only on the loaded data.
+                  </div>
+                </div>
+              )}
+
               {!stats ? (
                 <div style={{ color: C.dim, fontSize: 12 }}>No fault data in this scope.</div>
               ) : (
@@ -1757,9 +2121,9 @@ export default function FleetDataAnalyzer() {
                           <XAxis dataKey="code" stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} interval={0} angle={-30} textAnchor="end" height={55} />
                           <YAxis stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} allowDecimals={false} width={40} />
                           <Tooltip content={<DarkTooltip />} cursor={{ fill: "rgba(0,0,0,0.05)" }} />
-                          <Bar dataKey="count" onClick={(d) => { const code = d?.code ?? d?.payload?.code; if (code != null) { toggleVisCode(code); setTab("timeline"); } }} cursor="pointer" isAnimationActive={false}>
+                          <Bar dataKey="count" onClick={(d) => { const code = d?.code ?? d?.payload?.code; if (code != null) { toggleCode(code); setTab("timeline"); } }} cursor="pointer" isAnimationActive={false}>
                             {stats.pareto.slice(0, 12).map((e, i) => (
-                              <Cell key={i} fill={visCodes.includes(e.code) ? C.amber : C.red} fillOpacity={0.85} />
+                              <Cell key={i} fill={visExpert.includes(e.code) || visVcu.includes(e.code) ? C.amber : C.red} fillOpacity={0.85} />
                             ))}
                           </Bar>
                         </BarChart>
@@ -1792,8 +2156,8 @@ export default function FleetDataAnalyzer() {
                       </thead>
                       <tbody>
                         {stats.pareto.slice(0, 60).map((p) => (
-                          <tr key={p.code} style={{ borderBottom: `1px solid ${C.panelEdge}`, cursor: "pointer", background: visCodes.includes(p.code) ? "#e3f3f3" : "transparent" }}
-                            onClick={() => toggleVisCode(p.code)}>
+                          <tr key={p.code} style={{ borderBottom: `1px solid ${C.panelEdge}`, cursor: "pointer", background: visExpert.includes(p.code) || visVcu.includes(p.code) ? "#e3f3f3" : "transparent" }}
+                            onClick={() => toggleCode(p.code)}>
                             <td style={{ padding: "7px 10px", color: C.red, fontWeight: 600 }}>{p.code}</td>
                             <td style={{ padding: "7px 10px", color: C.ink }}>{p.desc || "—"}</td>
                             <td style={{ padding: "7px 10px", color: C.amber }}>{p.count}</td>
