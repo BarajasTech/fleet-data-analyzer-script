@@ -918,6 +918,7 @@ export default function FleetDataAnalyzer() {
   const [faultSearchE, setFaultSearchE] = useState(""); // Expert fault log search
   const [faultSearchV, setFaultSearchV] = useState(""); // VCU fault log search
   const [statsScope, setStatsScope] = useState("all"); // all | v1 | v2
+  const [cascadeWin, setCascadeWin] = useState(120);   // cascade clustering window, seconds
   /* AI analysis (Fault Statistics tab) */
   const [aiMessages, setAiMessages] = useState([]);
   const [aiInput, setAiInput] = useState("");
@@ -1103,6 +1104,65 @@ export default function FleetDataAnalyzer() {
     const mtbf = fd.length > 1 ? spanMs2 / (fd.length - 1) : null;
     return { pareto, total: fd.length, spanDays, perDay: fd.length / spanDays, trend, hourly, mtbf };
   }, [statsSource]);
+
+  /* ----- cascade analysis: co-occurrence matrix + trigger ranking -----
+     Group faults into incidents (events within cascadeWin of each other, per vehicle).
+     A multi-code incident is a "cascade": the earliest code is its trigger, and every
+     unordered code pair in it co-occurs. Separates root-cause from consequential faults. */
+  const cascade = useMemo(() => {
+    const fd = statsSource;
+    if (!fd || fd.length < 2) return null;
+    const winMs = cascadeWin * 1000;
+    const byVeh = {};
+    const byCodeTotal = {};
+    const descOf = {};
+    const srcOf = {};
+    for (const f of fd) {
+      (byVeh[f.vi || 1] ||= []).push(f);
+      byCodeTotal[f.code] = (byCodeTotal[f.code] || 0) + 1;
+      if (f.desc && !descOf[f.code]) descOf[f.code] = f.desc;
+      if (!srcOf[f.code]) srcOf[f.code] = f.src || "expert";
+    }
+    const clusters = [];
+    for (const vi in byVeh) {
+      const arr = [...byVeh[vi]].sort((a, b) => a.t - b.t);
+      let cur = [arr[0]];
+      for (let i = 1; i < arr.length; i++) {
+        if (arr[i].t - cur[cur.length - 1].t <= winMs) cur.push(arr[i]);
+        else { clusters.push(cur); cur = [arr[i]]; }
+      }
+      clusters.push(cur);
+    }
+    const pairCount = {};      // "a|b" (a<b) -> incidents containing both
+    const involve = {};        // code -> cascades it appears in
+    const trigger = {};        // code -> cascades it started
+    let cascadeCount = 0, isolated = 0;
+    for (const c of clusters) {
+      const codes = [...new Set(c.map((f) => f.code))];
+      if (codes.length < 2) { isolated++; continue; }
+      cascadeCount++;
+      trigger[c[0].code] = (trigger[c[0].code] || 0) + 1; // c sorted asc → first event leads
+      for (const code of codes) involve[code] = (involve[code] || 0) + 1;
+      for (let i = 0; i < codes.length; i++)
+        for (let j = i + 1; j < codes.length; j++) {
+          const key = codes[i] < codes[j] ? codes[i] + "|" + codes[j] : codes[j] + "|" + codes[i];
+          pairCount[key] = (pairCount[key] || 0) + 1;
+        }
+    }
+    if (!cascadeCount) return { cascadeCount: 0, isolated };
+    const meta = (code) => ({ code, desc: descOf[code] || "", src: srcOf[code], total: byCodeTotal[code] || 0 });
+    const triggers = Object.entries(trigger)
+      .map(([code, lead]) => ({ ...meta(code), lead, leadPct: byCodeTotal[code] ? (100 * lead) / byCodeTotal[code] : 0 }))
+      .sort((a, b) => b.lead - a.lead);
+    const topCodes = Object.entries(involve).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([c]) => c);
+    let maxPair = 0;
+    for (const k in pairCount) if (pairCount[k] > maxPair) maxPair = pairCount[k];
+    const cellVal = (a, b) => (a === b ? (involve[a] || 0) : (pairCount[(a < b ? a + "|" + b : b + "|" + a)] || 0));
+    const pairs = Object.entries(pairCount)
+      .map(([k, v]) => { const [a, b] = k.split("|"); return { a, b, v, aDesc: descOf[a] || "", bDesc: descOf[b] || "" }; })
+      .sort((x, y) => y.v - x.v).slice(0, 12);
+    return { cascadeCount, isolated, triggers, topCodes, maxPair, cellVal, pairs, descOf };
+  }, [statsSource, cascadeWin]);
 
   /* fault dropdown options: union of all codes */
   const allCodes = useMemo(() => {
@@ -2344,6 +2404,107 @@ export default function FleetDataAnalyzer() {
                       </ResponsiveContainer>
                     </div>
                   </div>
+
+                  {cascade && (
+                    <div style={{ background: C.panel, border: `1px solid ${C.panelEdge}`, borderTop: `3px solid ${C.violet}`, borderRadius: 6, padding: 18 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
+                        <Label>Cascade analysis — what fires together &amp; what starts it</Label>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          <span style={{ fontSize: 10, color: C.dim, letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600 }}>Group within:</span>
+                          {[["30s", 30], ["2 min", 120], ["5 min", 300]].map(([lbl, s]) => (
+                            <Chip key={s} active={cascadeWin === s} onClick={() => setCascadeWin(s)} color={C.violet}>{lbl}</Chip>
+                          ))}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 11, color: C.dim, fontFamily: "'IBM Plex Mono', monospace", marginBottom: 14 }}>
+                        {cascade.cascadeCount > 0
+                          ? `${cascade.cascadeCount} multi-fault cascade${cascade.cascadeCount > 1 ? "s" : ""} · ${cascade.isolated} isolated fault${cascade.isolated === 1 ? "" : "s"}. The trigger is the first code in each incident — strong root-cause signal; the matrix shows which codes co-occur.`
+                          : `No multi-fault cascades within ${cascadeWin >= 60 ? cascadeWin / 60 + " min" : cascadeWin + "s"} — faults are isolated (${cascade.isolated}). Try a wider window.`}
+                      </div>
+
+                      {cascade.cascadeCount > 0 && (
+                        <>
+                          <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+                            {/* Trigger ranking */}
+                            <div style={{ flex: "1 1 340px" }}>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: C.ink, marginBottom: 6, fontFamily: "'IBM Plex Mono', monospace" }}>Cascade triggers — codes that start an incident</div>
+                              <ResponsiveContainer width="100%" height={Math.max(180, Math.min(cascade.triggers.length, 10) * 30)}>
+                                <BarChart data={cascade.triggers.slice(0, 10)} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 6 }}>
+                                  <CartesianGrid stroke={C.faint} strokeDasharray="2 6" horizontal={false} />
+                                  <XAxis type="number" stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} allowDecimals={false} />
+                                  <YAxis type="category" dataKey="code" stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} width={62} />
+                                  <Tooltip content={<DarkTooltip />} cursor={{ fill: "rgba(0,0,0,0.05)" }} />
+                                  <Bar dataKey="lead" name="cascades led" fill={C.violet} fillOpacity={0.85} isAnimationActive={false}
+                                    onClick={(d) => { const code = d?.code ?? d?.payload?.code; if (code != null) { toggleCode(code); setTab("timeline"); } }} cursor="pointer" />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                            {/* Co-occurrence matrix */}
+                            <div style={{ flex: "1 1 340px", overflowX: "auto" }}>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: C.ink, marginBottom: 6, fontFamily: "'IBM Plex Mono', monospace" }}>Co-occurrence — codes in the same incident</div>
+                              <table style={{ borderCollapse: "collapse", fontFamily: "'IBM Plex Mono', monospace" }}>
+                                <thead>
+                                  <tr>
+                                    <th style={{ width: 50 }}></th>
+                                    {cascade.topCodes.map((c) => (
+                                      <th key={c} style={{ height: 58, verticalAlign: "bottom", padding: 0 }}>
+                                        <div style={{ transform: "rotate(-55deg)", transformOrigin: "left bottom", width: 16, whiteSpace: "nowrap", fontSize: 9, color: C.dim }}>{c}</div>
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {cascade.topCodes.map((r) => (
+                                    <tr key={r}>
+                                      <td onClick={() => { toggleCode(r); setTab("timeline"); }} style={{ fontSize: 9, color: C.ink, textAlign: "right", paddingRight: 6, cursor: "pointer", whiteSpace: "nowrap" }}>{r}</td>
+                                      {cascade.topCodes.map((cc) => {
+                                        const v = cascade.cellVal(r, cc);
+                                        const diag = r === cc;
+                                        const op = v > 0 && cascade.maxPair ? 0.12 + 0.88 * (v / cascade.maxPair) : 0;
+                                        const bg = diag ? "#ecebf6" : `rgba(0,153,153,${op})`;
+                                        return (
+                                          <td key={cc} title={diag ? `${r}: appears in ${v} cascade${v === 1 ? "" : "s"}` : `${r} + ${cc}: ${v} shared incident${v === 1 ? "" : "s"}`}
+                                            style={{ width: 26, height: 24, textAlign: "center", fontSize: 9, background: bg, color: !diag && op > 0.55 ? "#fff" : C.dim, border: `1px solid ${C.panelEdge}` }}>
+                                            {v || ""}
+                                          </td>
+                                        );
+                                      })}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+
+                          {/* Top co-occurring pairs */}
+                          {cascade.pairs.length > 0 && (
+                            <div style={{ marginTop: 14, overflowX: "auto" }}>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: C.ink, marginBottom: 6, fontFamily: "'IBM Plex Mono', monospace" }}>Strongest fault pairs (most shared incidents)</div>
+                              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                                <thead>
+                                  <tr style={{ color: C.dim, textAlign: "left" }}>
+                                    {["Code A", "Code B", "Shared incidents", "Descriptions"].map((h) => (
+                                      <th key={h} style={{ padding: "6px 10px", borderBottom: `1px solid ${C.faint}`, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em", textTransform: "uppercase", fontSize: 11 }}>{h}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {cascade.pairs.map((p) => (
+                                    <tr key={p.a + "|" + p.b} style={{ borderBottom: `1px solid ${C.panelEdge}` }}>
+                                      <td onClick={() => { toggleCode(p.a); setTab("timeline"); }} style={{ padding: "6px 10px", color: C.violet, fontWeight: 600, cursor: "pointer", fontFamily: "'IBM Plex Mono', monospace" }}>{p.a}</td>
+                                      <td onClick={() => { toggleCode(p.b); setTab("timeline"); }} style={{ padding: "6px 10px", color: C.violet, fontWeight: 600, cursor: "pointer", fontFamily: "'IBM Plex Mono', monospace" }}>{p.b}</td>
+                                      <td style={{ padding: "6px 10px", color: C.amber, fontFamily: "'IBM Plex Mono', monospace" }}>{p.v}</td>
+                                      <td style={{ padding: "6px 10px", color: C.dim, fontSize: 11 }}>{[p.aDesc, p.bDesc].filter(Boolean).join("  ·  ") || "—"}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
 
                   <div style={{ background: C.panel, border: `1px solid ${C.panelEdge}`, borderRadius: 6, padding: 18, overflowX: "auto" }}>
                     <Label>Fault code summary ({stats.pareto.length} distinct codes)</Label>
