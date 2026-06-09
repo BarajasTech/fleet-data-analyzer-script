@@ -36,6 +36,20 @@ const VEH = {
   2: { tag: "#00557c", fault: "#7353e5", dash: "7 4" },
 };
 
+/* Output-format directive for the sacrt-analyst-* fine-tunes. These models were trained
+   with a reasoning system prompt (see rag.py SYSTEM_PROMPT / add_reasoning.py) that expects
+   responses structured Reasoning: → Answer:. Appended to the live-data instruction only when
+   an sacrt model is selected, so the fine-tune behaves exactly as trained. */
+const SACRT_REASONING_FORMAT = [
+  "Structure every response EXACTLY as:",
+  "",
+  "Reasoning:",
+  "- Work through it step by step from the data above: what the relevant events/signals show, how they relate, and (for faults) likely cause and how to rule things out. Keep it proportional — 1-2 bullets for a simple lookup, more for a fault diagnosis.",
+  "",
+  "Answer:",
+  "A concise, technical conclusion. For a fault, give the likely root cause and corrective action(s) in order. Preserve fault codes, part numbers, and measurements exactly. If the data above does not contain the answer, say so plainly — do not guess.",
+].join("\n");
+
 /* ---------------- timestamp parsing ---------------- */
 /* snap timestamps within 2 ms of an exact second (Excel serial float drift, e.g. :22.999 → :23.000) */
 function snapMs(t) {
@@ -911,10 +925,12 @@ export default function FleetDataAnalyzer() {
   const [aiError, setAiError] = useState(null);
   const [aiKey, setAiKey] = useState("");      // Anthropic API key for self-hosted deployments; memory-only
   const [aiKeyOpen, setAiKeyOpen] = useState(false);
-  const [aiProvider, setAiProvider] = useState("claude"); // claude | ollama
+  const [aiProvider, setAiProvider] = useState("ollama"); // claude | ollama — default to the local fine-tune
   const [ollamaUrl, setOllamaUrl] = useState("http://localhost:11434");
-  const [ollamaModel, setOllamaModel] = useState("llama3.1");
+  const [ollamaModel, setOllamaModel] = useState("sacrt-analyst-r1"); // local QLoRA fine-tune (Qwen2.5-3B)
   const [ollamaModels, setOllamaModels] = useState([]);
+  const [autoAnalyze, setAutoAnalyze] = useState(true); // auto-summarize faults on load (Ollama)
+  const autoRunSig = useRef("");                          // one-shot guard per dataset
   const [setupOpen, setSetupOpen] = useState(false);
   const listOllamaModels = async () => {
     try {
@@ -1285,6 +1301,11 @@ export default function FleetDataAnalyzer() {
 
     /* ---- Ollama (local, free, data stays on your machine) ---- */
     if (aiProvider === "ollama") {
+      /* sacrt-analyst-* fine-tunes were trained with a Reasoning:→Answer: system prompt;
+         append that format so the local model responds as trained. */
+      const sysPrompt = /sacrt/i.test(ollamaModel)
+        ? instruction + "\n\n" + SACRT_REASONING_FORMAT
+        : instruction;
       try {
         const res = await fetch(`${ollamaUrl.replace(/\/$/, "")}/api/chat`, {
           method: "POST",
@@ -1292,7 +1313,7 @@ export default function FleetDataAnalyzer() {
           body: JSON.stringify({
             model: ollamaModel,
             stream: false,
-            messages: [{ role: "system", content: instruction }, ...history],
+            messages: [{ role: "system", content: sysPrompt }, ...history],
           }),
         });
         const data = await res.json();
@@ -1361,6 +1382,19 @@ export default function FleetDataAnalyzer() {
     setAiInput(question);
     setAiBusy(false);
   };
+
+  /* Auto-analysis: when a dataset first loads (and the local model is selected), fire one
+     fault-summary automatically. Guarded by a per-dataset signature so it runs once per load,
+     never overwrites an in-progress chat, and re-arms when new files are loaded. */
+  useEffect(() => {
+    if (!autoAnalyze || aiProvider !== "ollama" || stage !== "analyze") return;
+    if (!mergedFaults.length || aiBusy || aiMessages.length) return;
+    const sig = `${mergedFaults.length}:${mergedFaults[0]?.t}:${mergedFaults[mergedFaults.length - 1]?.t}`;
+    if (autoRunSig.current === sig) return;
+    autoRunSig.current = sig;
+    askAi("Auto-analysis: summarize this session's fault history — dominant failure modes, likely root-cause vs. consequential faults, notable clusters or repeated sequences, and anything that looks systemic. Keep it tight and technical.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoAnalyze, aiProvider, stage, mergedFaults, aiBusy, aiMessages.length]);
 
   /* ----- pan / zoom / scroll ----- */
   const chartWrapRef = useRef(null);
@@ -2163,10 +2197,11 @@ export default function FleetDataAnalyzer() {
                       <>
                         <input value={ollamaUrl} onChange={(e) => setOllamaUrl(e.target.value)} placeholder="http://localhost:11434"
                           style={{ width: 210, background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
-                        <input value={ollamaModel} onChange={(e) => setOllamaModel(e.target.value)} placeholder="model e.g. llama3.1" list="ollama-models"
-                          style={{ width: 150, background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
+                        <input value={ollamaModel} onChange={(e) => setOllamaModel(e.target.value)} placeholder="model e.g. sacrt-analyst-r1" list="ollama-models"
+                          style={{ width: 170, background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
                         <datalist id="ollama-models">{ollamaModels.map((m) => <option key={m} value={m} />)}</datalist>
                         <Btn small onClick={listOllamaModels}>List models</Btn>
+                        <Chip active={autoAnalyze} onClick={() => setAutoAnalyze(!autoAnalyze)} color={C.green}>Auto-analyze on load</Chip>
                       </>
                     )}
                   </div>
@@ -2225,9 +2260,9 @@ export default function FleetDataAnalyzer() {
                           <div style={{ fontWeight: 600, marginBottom: 2 }}>1 · Install Ollama</div>
                           <div style={{ color: C.dim, marginBottom: 8 }}>Download and run the installer from <a href="https://ollama.com/download" target="_blank" rel="noreferrer" style={{ color: C.petrol }}>ollama.com/download</a></div>
 
-                          <div style={{ fontWeight: 600, marginBottom: 2 }}>2 · Download a model — open PowerShell (Start menu → type "powershell") and paste:</div>
-                          <CopyCmd cmd="ollama pull gemma4" />
-                          <div style={{ color: C.dim, marginBottom: 8 }}>~5 GB download. PC with 16GB+ RAM? <span style={{ whiteSpace: "nowrap" }}>"ollama pull qwen2.5:14b"</span> answers noticeably better.</div>
+                          <div style={{ fontWeight: 600, marginBottom: 2 }}>2 · Use the SACRT fine-tune (recommended) — it's trained on these manuals + fault data and shows its reasoning. Build it once from the model folder:</div>
+                          <CopyCmd cmd="ollama create sacrt-analyst-r1 -q q4_K_M -f Modelfile" />
+                          <div style={{ color: C.dim, marginBottom: 8 }}>Run from the "Ollama Trained Model" folder (where the Modelfile + sacrt-r1-f16.gguf live). No fine-tune handy? <span style={{ whiteSpace: "nowrap" }}>"ollama pull qwen2.5:7b-instruct-q4_K_M"</span> is a solid general fallback.</div>
 
                           <div style={{ fontWeight: 600, marginBottom: 2 }}>3 · Allow this site to talk to your Ollama — paste in PowerShell:</div>
                           <CopyCmd cmd={`[Environment]::SetEnvironmentVariable("OLLAMA_ORIGINS", "${window.location.origin}", "User")`} />
