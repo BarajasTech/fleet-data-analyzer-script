@@ -18,22 +18,23 @@ const FONTS = `
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 `;
 
-/* Siemens corporate palette: Petrol #009999 (primary), Deep Blue #000028 (text),
-   Light Sand #F3F3F0 (background), functional red/green/blue accents */
+/* Dark instrument palette (matches the LRV consist animator): deep slate
+   surfaces, light slate text, amber/teal/red/green functional accents. */
 const C = {
-  bg: "#f3f3f0", panel: "#ffffff", panelEdge: "#e0e0da",
-  ink: "#000028", dim: "#66667e", faint: "#c0c0cc",
-  amber: "#009999", red: "#d72339", green: "#1b8038", cyan: "#00557c", violet: "#7353e5",
+  bg: "#10161D", panel: "#1A222C", panelEdge: "#27313D",
+  ink: "#D7E0EA", dim: "#7A8794", faint: "#3a4654",
+  amber: "#3FB6C9", red: "#E5534B", green: "#4CC38A", cyan: "#5aa9d6", violet: "#9b86f0",
+  petrol: "#3FB6C9",
 };
 const SIG_COLORS = [
-  "#009999", "#00557c", "#d72339", "#7353e5",
-  "#e96401", "#1b8038", "#99700a", "#cc3377",
-  "#006b5e", "#5e5e8e", "#4e7b0f", "#0e6fc0",
-  "#962b6e", "#2f8f83", "#b0451b", "#44546a",
+  "#3FB6C9", "#5aa9d6", "#E5534B", "#9b86f0",
+  "#f08a3c", "#4CC38A", "#d6b740", "#e06aa0",
+  "#3fcab0", "#9a9ae0", "#9ed14e", "#56b0f0",
+  "#d56ab0", "#46c4b6", "#e8794a", "#8aa0c0",
 ];
 const VEH = {
-  1: { tag: "#009999", fault: "#d72339", dash: undefined },
-  2: { tag: "#00557c", fault: "#7353e5", dash: "7 4" },
+  1: { tag: "#3FB6C9", fault: "#E5534B", dash: undefined },
+  2: { tag: "#5aa9d6", fault: "#9b86f0", dash: "7 4" },
 };
 
 /* Output-format directive for the sacrt-analyst-* fine-tunes. These models were trained
@@ -223,7 +224,7 @@ const Label = ({ children }) => (
 );
 const Select = ({ value, onChange, options, placeholder }) => (
   <select value={value || ""} onChange={(e) => onChange(e.target.value || null)}
-    style={{ width: "100%", background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "8px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }}>
+    style={{ width: "100%", background: "#141b24", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "8px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }}>
     <option value="">{placeholder || "— select —"}</option>
     {options.map((o) => (<option key={o} value={o}>{o}</option>))}
   </select>
@@ -234,8 +235,8 @@ function Btn({ children, onClick, primary, disabled, small }) {
       style={{
         fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase",
         fontSize: small ? 12 : 14, padding: small ? "6px 12px" : "10px 22px", cursor: disabled ? "not-allowed" : "pointer",
-        background: primary ? (disabled ? "#cfe6e6" : C.amber) : "transparent",
-        color: primary ? (disabled ? "#5d8f8f" : "#ffffff") : C.amber,
+        background: primary ? (disabled ? "#1f3a3f" : C.amber) : "transparent",
+        color: primary ? (disabled ? "#4d6d6d" : "#ffffff") : C.amber,
         border: `1px solid ${primary ? "transparent" : C.amber}`,
         borderRadius: 3, opacity: disabled ? 0.5 : 1, transition: "all .15s",
       }}>{children}</button>
@@ -245,7 +246,7 @@ const Chip = ({ active, onClick, children, color }) => (
   <div onClick={onClick} style={{
     fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, padding: "4px 10px", borderRadius: 3, cursor: "pointer",
     border: `1px solid ${active ? (color || C.amber) : C.faint}`, color: active ? (color || C.amber) : C.dim,
-    background: active ? "#e9f1f1" : "transparent", whiteSpace: "nowrap",
+    background: active ? "#1b2e34" : "transparent", whiteSpace: "nowrap",
   }}>{children}</div>
 );
 
@@ -264,16 +265,16 @@ function SignalDropdown({ label, color, allSignals, selected, onChange }) {
       <button onClick={() => setOpen(!open)}
         style={{
           fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase",
-          fontSize: 12, padding: "6px 12px", cursor: "pointer", background: open ? "#e9f1f1" : "transparent",
+          fontSize: 12, padding: "6px 12px", cursor: "pointer", background: open ? "#1b2e34" : "transparent",
           color: color, border: `1px solid ${color}`, borderRadius: 3,
         }}>
         {label} ({selected.length}/{allSignals.length}) {open ? "▴" : "▾"}
       </button>
       {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 50, width: 340, maxWidth: "85vw", background: "#ffffff", border: `1px solid ${C.faint}`, borderRadius: 6, boxShadow: "0 8px 30px rgba(40,50,60,0.18)", padding: 10 }}>
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 50, width: 340, maxWidth: "85vw", background: "#1A222C", border: `1px solid ${C.faint}`, borderRadius: 6, boxShadow: "0 8px 30px rgba(40,50,60,0.18)", padding: 10 }}>
           <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
             <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search signals…"
-              style={{ flex: 1, background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
+              style={{ flex: 1, background: "#141b24", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
             <span onClick={() => setOpen(false)} style={{ color: C.dim, cursor: "pointer", padding: "4px 6px" }}>✕</span>
           </div>
           <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
@@ -286,7 +287,7 @@ function SignalDropdown({ label, color, allSignals, selected, onChange }) {
               const idx = selected.indexOf(c);
               return (
                 <div key={c} onClick={() => toggle(c)}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 6px", borderRadius: 3, cursor: "pointer", background: on ? "#e9f1f1" : "transparent" }}>
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 6px", borderRadius: 3, cursor: "pointer", background: on ? "#1b2e34" : "transparent" }}>
                   <span style={{ width: 13, height: 13, borderRadius: 2, flexShrink: 0, border: `1px solid ${on ? SIG_COLORS[idx % SIG_COLORS.length] : C.faint}`, background: on ? SIG_COLORS[idx % SIG_COLORS.length] : "transparent" }} />
                   <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: on ? C.ink : C.dim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c}</span>
                 </div>
@@ -387,7 +388,7 @@ function FilePanel({ title, accent, data, setData, kind }) {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: C.ink, background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", display: "flex", justifyContent: "space-between", gap: 8 }}>
+          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: C.ink, background: "#141b24", border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", display: "flex", justifyContent: "space-between", gap: 8 }}>
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📄 {data.fileName}</span>
             <span style={{ color: C.red, cursor: "pointer" }} onClick={() => setData(null)}>✕</span>
           </div>
@@ -411,7 +412,7 @@ function FilePanel({ title, accent, data, setData, kind }) {
             <div>
               <Label>Signal channels — {data.numericCols.length} numeric found · {data.signals.length} selected</Label>
               <input value={sigSearch} onChange={(e) => setSigSearch(e.target.value)} placeholder="Search signals… e.g. speed, brake"
-                style={{ width: "100%", boxSizing: "border-box", background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none", marginBottom: 8 }} />
+                style={{ width: "100%", boxSizing: "border-box", background: "#141b24", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none", marginBottom: 8 }} />
               <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
                 <Btn small onClick={() => {
                   const q = sigSearch.trim().toLowerCase();
@@ -437,7 +438,7 @@ function FilePanel({ title, accent, data, setData, kind }) {
                         fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, padding: "5px 10px", borderRadius: 3, cursor: "pointer",
                         border: `1px solid ${on ? SIG_COLORS[idx % SIG_COLORS.length] : C.faint}`,
                         color: on ? SIG_COLORS[idx % SIG_COLORS.length] : C.dim,
-                        background: on ? "#e9f1f1" : "transparent",
+                        background: on ? "#1b2e34" : "transparent",
                       }}>{c}</div>
                   );
                 })}
@@ -482,7 +483,7 @@ function CopyCmd({ cmd }) {
   };
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "stretch", margin: "4px 0" }}>
-      <code style={{ flex: 1, background: "#1d2129", color: "#e8e8e3", borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, overflowX: "auto", whiteSpace: "pre" }}>{cmd}</code>
+      <code style={{ flex: 1, background: "#0d1219", color: "#d4dde7", borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, overflowX: "auto", whiteSpace: "pre" }}>{cmd}</code>
       <button onClick={copy} style={{ background: done ? "#0d8a3e" : C.petrol, color: "#fff", border: "none", borderRadius: 4, padding: "0 12px", cursor: "pointer", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, whiteSpace: "nowrap" }}>{done ? "Copied ✓" : "Copy"}</button>
     </div>
   );
@@ -519,7 +520,7 @@ function VcuPanel({ accent, data, setData }) {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: C.ink, background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", display: "flex", justifyContent: "space-between", gap: 8 }}>
+          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: C.ink, background: "#141b24", border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", display: "flex", justifyContent: "space-between", gap: 8 }}>
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📄 {data.fileName}</span>
             <span style={{ color: C.red, cursor: "pointer" }} onClick={() => setData(null)}>✕</span>
           </div>
@@ -542,7 +543,7 @@ const DarkTooltip = ({ active, payload, label, labelMap }) => {
   if (!active || !payload?.length) return null;
   const realLabel = typeof label === "number" && labelMap ? labelMap(label) : label;
   return (
-    <div style={{ background: "#ffffff", border: `1px solid ${C.faint}`, borderRadius: 4, padding: "8px 12px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, maxWidth: 320 }}>
+    <div style={{ background: "#1A222C", border: `1px solid ${C.faint}`, borderRadius: 4, padding: "8px 12px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, maxWidth: 320 }}>
       <div style={{ color: C.dim, marginBottom: 4 }}>{typeof realLabel === "number" ? fmtFull(realLabel) : realLabel}</div>
       {payload.map((p, i) => (
         <div key={i} style={{ color: p.color || C.ink }}>{p.name}: <b>{typeof p.value === "number" ? p.value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : p.value}</b></div>
@@ -552,7 +553,7 @@ const DarkTooltip = ({ active, payload, label, labelMap }) => {
 };
 
 /* ---------------- TELOC-style digital logic lane ---------------- */
-function DigitalLane({ label, color, tagColor, pts, domain, faults, selFault }) {
+function DigitalLane({ label, color, tagColor, pts, domain, faults, selFault, cursor }) {
   const [a, b] = domain;
   const W = 1000, H = 30, span = (b - a) || 1;
   const x = (t) => ((t - a) / span) * W;
@@ -567,16 +568,17 @@ function DigitalLane({ label, color, tagColor, pts, domain, faults, selFault }) 
   }
   return (
     <div className="lane-row" data-label={label} data-color={color} style={{ display: "flex", alignItems: "stretch", borderTop: `1px solid ${C.panelEdge}` }}>
-      <div style={{ flex: "0 0 190px", minWidth: 0, fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", color, padding: "0 8px", borderRight: `1px solid ${C.panelEdge}`, borderLeft: `3px solid ${tagColor || "transparent"}`, display: "flex", alignItems: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", background: "#f7f7f4" }} title={label}>
+      <div style={{ flex: "0 0 190px", minWidth: 0, fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", color, padding: "0 8px", borderRight: `1px solid ${C.panelEdge}`, borderLeft: `3px solid ${tagColor || "transparent"}`, display: "flex", alignItems: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", background: "#141b24" }} title={label}>
         {label}
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ flex: 1, height: 28, display: "block", background: "#ffffff" }}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ flex: 1, height: 28, display: "block", background: "#1A222C" }}>
         {faults.map((f) => {
           const fx = x(f.t);
           if (fx < 0 || fx > W) return null;
           const sel = `${f.vi}-${f.id}` === selFault;
           return <line key={`${f.vi}-${f.id}`} x1={fx} x2={fx} y1={0} y2={H} stroke={sel ? C.amber : VEH[f.vi].fault} strokeOpacity={sel ? 1 : 0.45} strokeWidth={sel ? 2 : 1} vectorEffect="non-scaling-stroke" strokeDasharray={sel ? undefined : "3 3"} />;
         })}
+        {cursor != null && cursor >= a && cursor <= b && <line x1={x(cursor)} x2={x(cursor)} y1={0} y2={H} stroke={C.cyan} strokeWidth={1.4} vectorEffect="non-scaling-stroke" />}
         <path d={d} fill="none" stroke={color} strokeWidth={1.3} vectorEffect="non-scaling-stroke" />
       </svg>
     </div>
@@ -584,7 +586,7 @@ function DigitalLane({ label, color, tagColor, pts, domain, faults, selFault }) 
 }
 
 /* ---------------- fault occurrences as a pulse-train signal lane ---------------- */
-function FaultLane({ label, color, tagColor, events, domain }) {
+function FaultLane({ label, color, tagColor, events, domain, cursor }) {
   const [a, b] = domain;
   const W = 1000, H = 30, span = (b - a) || 1;
   const base = H - 6, top = 6, hw = 2;
@@ -610,11 +612,12 @@ function FaultLane({ label, color, tagColor, events, domain }) {
   d += `L${W},${base}`;
   return (
     <div className="lane-row" data-label={`${label} ×${events.length}`} data-color={color} style={{ display: "flex", alignItems: "stretch", borderTop: `1px solid ${C.panelEdge}` }}>
-      <div style={{ flex: "0 0 190px", minWidth: 0, fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", color, padding: "0 8px", borderRight: `1px solid ${C.panelEdge}`, borderLeft: `3px solid ${tagColor || "transparent"}`, display: "flex", alignItems: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", background: "#f7f7f4", fontWeight: 600 }} title={`${label} — ${events.length} in window`}>
+      <div style={{ flex: "0 0 190px", minWidth: 0, fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", color, padding: "0 8px", borderRight: `1px solid ${C.panelEdge}`, borderLeft: `3px solid ${tagColor || "transparent"}`, display: "flex", alignItems: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", background: "#141b24", fontWeight: 600 }} title={`${label} — ${events.length} in window`}>
         {label}&nbsp;<span style={{ color: C.dim, fontWeight: 400 }}>×{events.length}</span>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ flex: 1, height: 28, display: "block", background: "#ffffff" }}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ flex: 1, height: 28, display: "block", background: "#1A222C" }}>
         <path d={d} fill="none" stroke={color} strokeWidth={1.3} vectorEffect="non-scaling-stroke" />
+        {cursor != null && cursor >= a && cursor <= b && <line x1={x(cursor)} x2={x(cursor)} y1={0} y2={H} stroke={C.cyan} strokeWidth={1.4} vectorEffect="non-scaling-stroke" />}
       </svg>
     </div>
   );
@@ -635,16 +638,16 @@ function FaultLaneDropdown({ allCodes, selected, onChange, label = "⚠ Fault la
       <button onClick={() => setOpen(!open)}
         style={{
           fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase",
-          fontSize: 12, padding: "6px 12px", cursor: "pointer", background: open ? "#e9f1f1" : "transparent",
+          fontSize: 12, padding: "6px 12px", cursor: "pointer", background: open ? "#1b2e34" : "transparent",
           color: color, border: `1px solid ${color}`, borderRadius: 3,
         }}>
         {label} ({selected.length || (emptyMeansAll ? "all" : 0)}) {open ? "▴" : "▾"}
       </button>
       {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 50, width: 360, maxWidth: "85vw", background: "#ffffff", border: `1px solid ${C.faint}`, borderRadius: 6, boxShadow: "0 8px 24px rgba(40,50,60,0.18)", padding: 10 }}>
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 50, width: 360, maxWidth: "85vw", background: "#1A222C", border: `1px solid ${C.faint}`, borderRadius: 6, boxShadow: "0 8px 24px rgba(40,50,60,0.18)", padding: 10 }}>
           <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
             <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search fault codes…"
-              style={{ flex: 1, background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
+              style={{ flex: 1, background: "#141b24", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
             <span onClick={() => setOpen(false)} style={{ color: C.dim, cursor: "pointer", padding: "4px 6px" }}>✕</span>
           </div>
           <div style={{ display: "flex", gap: 6, marginBottom: 8 }}><Btn small onClick={() => onChange(capped(allCodes.map((p) => p.code)))}>Select all{Number.isFinite(maxSelect) ? ` (max ${maxSelect})` : ""}</Btn><Btn small onClick={() => onChange([])}>Clear</Btn></div>
@@ -653,7 +656,7 @@ function FaultLaneDropdown({ allCodes, selected, onChange, label = "⚠ Fault la
               const on = selected.includes(p.code);
               return (
                 <div key={p.code} onClick={() => toggle(p.code)}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 6px", borderRadius: 3, cursor: "pointer", background: on ? "#e9f1f1" : "transparent" }}>
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 6px", borderRadius: 3, cursor: "pointer", background: on ? "#1b2e34" : "transparent" }}>
                   <span style={{ width: 13, height: 13, borderRadius: 2, flexShrink: 0, border: `1px solid ${on ? color : C.faint}`, background: on ? color : "transparent" }} />
                   <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: on ? C.ink : C.dim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.code}{p.desc ? ` — ${p.desc}` : ""} ({p.count})</span>
                 </div>
@@ -875,6 +878,257 @@ function windowRows(recData, signals, domain, normalize, ranges, prefix) {
   });
 }
 
+/* ============================================================
+   LRV CONSIST ANIMATOR — ported from consist-telemetry-animator.jsx
+   Rendering + consist/OCS logic kept intact; data source and the time
+   cursor are wired to the app's shared state instead of a standalone loader.
+   ============================================================ */
+const MONO = "'IBM Plex Mono', monospace";
+/* vehicle-render palette (the silver car body, glass, livery) — kept separate
+   from the app's Siemens UI palette so LRVCar draws exactly as designed */
+const LRV = {
+  body: "#E8EAED", bodyShade: "#C9CDD2", glass: "#2C3E50",
+  teal: "#3FB6C9", amber: "#F2B135", red: "#E5534B", rail: "#5B6672",
+};
+const fmtMMSS = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+/* fill missing distance by integrating speed; track the partner (coupled vs frozen) */
+function finalizeConsist(data) {
+  let d = 0;
+  for (let i = 0; i < data.length; i++) {
+    if (data[i].pos == null) {
+      if (i > 0) {
+        const dt = (data[i].t - data[i - 1].t) / 1000; // epoch ms → s
+        d += ((data[i].speed + data[i - 1].speed) / 2) * 0.44704 * Math.max(0, dt);
+      }
+      data[i].pos = d;
+    }
+  }
+  let frozen = null;
+  for (let i = 0; i < data.length; i++) {
+    const p = data[i];
+    const coupled = p.coupledA || p.coupledB;
+    if (coupled) { frozen = null; p.partnerSide = p.coupledA ? "A" : "B"; p.partnerPos = null; }
+    else if (frozen == null && i > 0 && (data[i - 1].coupledA || data[i - 1].coupledB)) {
+      frozen = { pos: data[i - 1].pos, side: data[i - 1].coupledA ? "A" : "B" };
+    }
+    if (!coupled && frozen) { p.partnerPos = frozen.pos; p.partnerSide = frozen.side; }
+  }
+  return data;
+}
+
+function interpConsist(data, t) {
+  if (!data.length) return null;
+  if (t <= data[0].t) return data[0];
+  if (t >= data[data.length - 1].t) return data[data.length - 1];
+  let lo = 0, hi = data.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (data[m].t <= t) lo = m; else hi = m; }
+  const a = data[lo], b = data[hi], f = (t - a.t) / Math.max(1e-9, b.t - a.t);
+  return {
+    ...a,
+    speed: a.speed + f * (b.speed - a.speed),
+    pos: a.pos + f * (b.pos - a.pos),
+    lineV: a.lineV + f * (b.lineV - a.lineV),
+  };
+}
+
+function findConsistStops(data) {
+  const stops = []; let s = -1;
+  for (let i = 0; i < data.length; i++) {
+    const st = data[i].speed < 0.3;
+    if (st && s === -1) s = i;
+    if ((!st || i === data.length - 1) && s !== -1) {
+      const e = !st ? i - 1 : i;
+      if (data[e].t - data[s].t >= 8000) stops.push(data[Math.floor((s + e) / 2)].pos);
+      s = -1;
+    }
+  }
+  return stops;
+}
+
+/* Build the animator dataset from the already-parsed recorder rows by mapping
+   TELOC channel names — independent of which signals the user plotted. Returns
+   null if no speed channel is found. `present` flags drive graceful UI hiding. */
+function buildConsistData(rec) {
+  if (!rec?.rows?.length || !rec.tsCol) return null;
+  const cols = rec.cols || [];
+  const find = (re) => cols.find((c) => re.test(c));
+  const cSpeed = find(/ER_SYS_Speed|^Speed/i);
+  if (!cSpeed) return null;
+  const cDist = find(/^Distance/i);
+  const cLineV = find(/InputLineDC_V|Line.*V|OCS/i);
+  const cDoorL = find(/DoorsClosedSummaryLeft/i);
+  const cDoorR = find(/DoorsClosedSummaryRight/i);
+  const cBrake = find(/^L_Brake$/i);
+  const cBrakeP = find(/BCUA_BrakeCylPressure/i);
+  const cCoupA = find(/^MechCoupledA$/i);
+  const cCoupB = find(/^MechCoupledB$/i);
+  const cHscb = find(/^HSCBOn$/i);
+  const speedIsMph = /mph/i.test(cSpeed);
+  const num = (v) => (typeof v === "number" ? v : (v != null && v !== "" && !isNaN(+v) ? +v : 0));
+  const raw = [];
+  for (const r of rec.rows) {
+    const t = buildTs(r[rec.tsCol], rec.timeCol ? r[rec.timeCol] : null);
+    if (t == null) continue;
+    raw.push({
+      t,
+      speed: num(r[cSpeed]) * (speedIsMph ? 1 : 0.621371),
+      pos: cDist ? num(r[cDist]) * 1000 : null,
+      lineV: cLineV ? num(r[cLineV]) : 0,
+      doorsL: cDoorL ? (num(r[cDoorL]) === 0 ? 1 : 0) : 0,
+      doorsR: cDoorR ? (num(r[cDoorR]) === 0 ? 1 : 0) : 0,
+      brake: cBrake ? num(r[cBrake]) : 0,
+      brakePress: cBrakeP ? num(r[cBrakeP]) : 0,
+      coupledA: cCoupA ? num(r[cCoupA]) : 0,
+      coupledB: cCoupB ? num(r[cCoupB]) : 0,
+      hscb: cHscb ? num(r[cHscb]) : 1,
+    });
+  }
+  if (raw.length < 2) return null;
+  raw.sort((a, b) => a.t - b.t);
+  const d0 = raw[0].pos ?? 0; // rebase distance to 0 at the start of the loaded window
+  for (const p of raw) if (p.pos != null) p.pos -= d0;
+  // Vehicle Id from the Header sheet if the workbook carries one (TELOC native export)
+  let headerId = null;
+  const hs = rec.wb?.Sheets?.Header;
+  if (hs) {
+    try {
+      for (const row of XLSX.utils.sheet_to_json(hs, { header: 1 })) {
+        if (String(row[0]).trim() === "Vehicle Id") headerId = String(row[1]);
+      }
+    } catch { /* ignore malformed header */ }
+  }
+  const present = {
+    dist: !!cDist, lineV: !!cLineV, doorsL: !!cDoorL, doorsR: !!cDoorR,
+    brake: !!cBrake, brakePress: !!cBrakeP, coupled: !!(cCoupA || cCoupB), hscb: !!cHscb,
+  };
+  return { data: finalizeConsist(raw), present, headerId };
+}
+
+/* articulated LRV side profile — one car = 3 sections with a cab at EACH end
+   (B-cab left, A-cab right), 4 door pairs, 2 articulations, 4 trucks. As-is. */
+function LRVCar({ x, doorsOpen, pantoUp, brake, arc, wheelAngle, label, ghost }) {
+  const W = 430, BODY_Y = 58, BODY_H = 68, RAIL = 150;
+  const doorShift = doorsOpen ? 11 : 0;
+
+  const wheel = (cx) => (
+    <g transform={`translate(${cx}, ${RAIL - 12})`}>
+      <circle r="12" fill="#222A33" stroke="#3A454F" strokeWidth="2" />
+      <g transform={`rotate(${wheelAngle})`}>
+        <line x1="-9" y1="0" x2="9" y2="0" stroke="#56616C" strokeWidth="2" />
+        <line x1="0" y1="-9" x2="0" y2="9" stroke="#56616C" strokeWidth="2" />
+      </g>
+      <circle r="3" fill="#56616C" />
+    </g>
+  );
+
+  const truck = (cx) => (
+    <g>
+      <rect x={cx - 26} y={RAIL - 26} width="52" height="10" rx="2" fill="#1C242D" />
+      {wheel(cx - 14)}
+      {wheel(cx + 14)}
+    </g>
+  );
+
+  const doorPair = (cx) => (
+    <g>
+      <rect x={cx - 13} y={BODY_Y + 8} width="26" height={BODY_H - 8} rx="2"
+        fill="#39434D" opacity={doorsOpen ? 0.9 : 0} style={{ transition: "opacity .3s" }} />
+      <rect x={cx - 13 - doorShift} y={BODY_Y + 8} width="13" height={BODY_H - 8}
+        fill={LRV.bodyShade} stroke="#9AA2AA" strokeWidth="0.8" style={{ transition: "x .4s ease" }} />
+      <rect x={cx + doorShift} y={BODY_Y + 8} width="13" height={BODY_H - 8}
+        fill={LRV.bodyShade} stroke="#9AA2AA" strokeWidth="0.8" style={{ transition: "x .4s ease" }} />
+      <rect x={cx - 13 - doorShift} y={BODY_Y + 14} width="13" height="24" fill={LRV.glass} style={{ transition: "x .4s ease" }} />
+      <rect x={cx + doorShift} y={BODY_Y + 14} width="13" height="24" fill={LRV.glass} style={{ transition: "x .4s ease" }} />
+      {doorsOpen && <rect x={cx - 13} y={BODY_Y + 4} width="26" height="3" fill={LRV.amber} rx="1" />}
+    </g>
+  );
+
+  const bellows = (cx) => (
+    <g>
+      <rect x={cx - 7} y={BODY_Y + 4} width="14" height={BODY_H - 4} fill="#3A434C" rx="2" />
+      {[-4, 0, 4].map((o) => (
+        <line key={o} x1={cx + o} y1={BODY_Y + 6} x2={cx + o} y2={BODY_Y + BODY_H - 2} stroke="#262E36" strokeWidth="2" />
+      ))}
+    </g>
+  );
+
+  const nose = (right) => {
+    const sx = right ? 1 : -1, ox = right ? W : 0;
+    const rear = !right; // travel direction is right: right end = front
+    return (
+      <g transform={`translate(${ox},0) scale(${sx},1)`}>
+        <path d={`M -28 ${BODY_Y} L -12 ${BODY_Y + 10} Q 0 ${BODY_Y + 22} 0 ${BODY_Y + 40}
+                  L 0 ${BODY_Y + BODY_H} L -28 ${BODY_Y + BODY_H} Z`} fill={LRV.body} stroke="#AEB4BA" strokeWidth="1" />
+        <path d={`M -24 ${BODY_Y + 6} L -10 ${BODY_Y + 14} Q -3 ${BODY_Y + 24} -3 ${BODY_Y + 36}
+                  L -24 ${BODY_Y + 36} Z`} fill={LRV.glass} />
+        <circle cx={-4} cy={BODY_Y + 52} r="3.5"
+          fill={rear ? (brake ? LRV.red : "#6B4040") : "#FFE9B0"} />
+      </g>
+    );
+  };
+
+  return (
+    <g transform={`translate(${x},0)`} opacity={ghost ? 0.92 : 1}>
+      {/* pantograph (center section) */}
+      <g transform={`translate(${W / 2}, ${BODY_Y})`}>
+        {pantoUp ? (
+          <g>
+            <line x1="-16" y1="0" x2="0" y2="-22" stroke="#8B949D" strokeWidth="2.5" />
+            <line x1="16" y1="0" x2="0" y2="-22" stroke="#8B949D" strokeWidth="2.5" />
+            <line x1="-12" y1="-22" x2="12" y2="-22" stroke="#B7BEC5" strokeWidth="3" />
+            <circle cx="0" cy="-22" r="2" fill={LRV.amber} />
+            {arc && (
+              <g>
+                <circle cx="0" cy="-23" r="4.5" fill={LRV.amber} opacity="0.85" />
+                <path d="M -6 -28 L -2 -23 L -7 -21 M 6 -28 L 2 -23 L 7 -21" stroke="#FFE9B0" strokeWidth="1.4" fill="none" />
+              </g>
+            )}
+          </g>
+        ) : (
+          <line x1="-16" y1="0" x2="16" y2="-4" stroke="#8B949D" strokeWidth="2.5" />
+        )}
+      </g>
+
+      {/* body: three sections between the two cab noses */}
+      <rect x="24" y={BODY_Y} width={W - 48} height={BODY_H} fill={LRV.body} stroke="#AEB4BA" strokeWidth="1" />
+      {nose(false)}
+      {nose(true)}
+      {/* livery band + skirt across full car incl. noses */}
+      <rect x="0" y={BODY_Y + BODY_H - 14} width={W} height="14" fill={LRV.teal} opacity="0.9" />
+      <rect x="0" y={BODY_Y + BODY_H - 3} width={W} height="3" fill="#22303A" />
+      {/* window strip */}
+      <rect x="34" y={BODY_Y + 14} width="36" height="24" fill={LRV.glass} rx="2" />
+      <rect x="136" y={BODY_Y + 14} width="12" height="24" fill={LRV.glass} rx="2" />
+      <rect x="186" y={BODY_Y + 14} width="58" height="24" fill={LRV.glass} rx="2" />
+      <rect x="282" y={BODY_Y + 14} width="12" height="24" fill={LRV.glass} rx="2" />
+      <rect x="360" y={BODY_Y + 14} width="36" height="24" fill={LRV.glass} rx="2" />
+      {/* doors — 4 sets per car */}
+      {doorPair(90)}
+      {doorPair(165)}
+      {doorPair(265)}
+      {doorPair(340)}
+      {/* articulations */}
+      {bellows(125)}
+      {bellows(305)}
+      {/* roof equipment */}
+      <rect x="40" y={BODY_Y - 8} width="44" height="8" rx="2" fill="#43505B" />
+      <rect x={W - 84} y={BODY_Y - 8} width="44" height="8" rx="2" fill="#43505B" />
+      {/* cab-end labels */}
+      <text x="6" y={BODY_Y + 50} fontFamily={MONO} fontSize="9" fontWeight="700" fill="#6B7682">B</text>
+      <text x={W - 11} y={BODY_Y + 50} fontFamily={MONO} fontSize="9" fontWeight="700" fill="#6B7682">A</text>
+      {/* vehicle number — prominent, center of car */}
+      <text x={W / 2} y={BODY_Y + 54} textAnchor="middle" fontFamily={MONO} fontSize="14"
+        fontWeight="700" fill="#33415A">{label}</text>
+      {/* trucks */}
+      {truck(46)}
+      {truck(160)}
+      {truck(270)}
+      {truck(W - 46)}
+    </g>
+  );
+}
+
 /* ============================================================ MAIN ============================================================ */
 export default function FleetDataAnalyzer() {
   const [rec1, setRec1] = useState(null);
@@ -895,6 +1149,11 @@ export default function FleetDataAnalyzer() {
   const [selFault, setSelFault] = useState(null); // "vi-id"
   const [normalize, setNormalize] = useState(true);
   const [continuous, setContinuous] = useState(false); // gap-compressed time axis
+  const [cursorT, setCursorT] = useState(null);   // shared playhead (epoch ms) — links charts ↔ animator
+  const [animOpen, setAnimOpen] = useState(false); // Consist Animation section expanded
+  const [playing, setPlaying] = useState(false);
+  const [rate, setRate] = useState(2);             // playback speed ×real-time
+  const [consistMode, setConsistMode] = useState("auto"); // auto | "1" | "2"
   const [visExpert, setVisExpert] = useState([]); // Expert fault codes shown; empty = all Expert faults
   const [visVcu, setVisVcu] = useState([]);       // VCU fault codes shown; empty = all VCU faults
   const totalSel = visExpert.length + visVcu.length;
@@ -949,6 +1208,19 @@ export default function FleetDataAnalyzer() {
   /* ----- processed per vehicle ----- */
   const recData1 = useMemo(() => processRec(rec1), [rec1]);
   const recData2 = useMemo(() => processRec(rec2), [rec2]);
+
+  /* consist animator dataset — mapped from vehicle 1's recorder rows (TELOC channels) */
+  const consist = useMemo(() => buildConsistData(rec1), [rec1]);
+  const consistMeta = useMemo(() => {
+    if (!consist?.data?.length) return null;
+    const d = consist.data;
+    const vs = d.map((p) => p.lineV).filter((v) => v > 100).sort((a, b) => a - b);
+    return {
+      vNom: vs.length ? vs[Math.floor(vs.length / 2)] : 600,
+      stops: findConsistStops(d),
+      t0: d[0].t, t1: d[d.length - 1].t,
+    };
+  }, [consist]);
   /* Expert rows + VCU events merged into one fault stream per vehicle.
      VCU ids are offset so they never collide with Expert row indexes. */
   const mergeVehicleFaults = (expert, vcu, offSec) => {
@@ -1191,7 +1463,7 @@ export default function FleetDataAnalyzer() {
 
   const ready = recData1?.length && faultData1?.length;
 
-  const zoomToFault = (f) => { setSelFault(`${f.vi}-${f.id}`); setDomain([f.t - 120000, f.t + 120000]); setTab("timeline"); };
+  const zoomToFault = (f) => { setSelFault(`${f.vi}-${f.id}`); setDomain([f.t - 120000, f.t + 120000]); setCursorT(f.t); setPlaying(false); setTab("timeline"); };
 
   /* ----- signal snapshot at the selected fault ----- */
   const selSnapshot = useMemo(() => {
@@ -1530,7 +1802,7 @@ export default function FleetDataAnalyzer() {
       setBand({ x1: e.clientX - rect.left, x2: e.clientX - rect.left });
       return;
     }
-    dragRef.current = { x: e.clientX, vdom: [tv(activeDomain[0]), tv(activeDomain[1])], w: rect.width };
+    dragRef.current = { x: e.clientX, vdom: [tv(activeDomain[0]), tv(activeDomain[1])], w: rect.width, rect, moved: false };
   };
   const chartPointerMove = (e) => {
     if (bandRef.current) {
@@ -1540,10 +1812,11 @@ export default function FleetDataAnalyzer() {
     }
     const d = dragRef.current;
     if (!d) return;
+    if (Math.abs(e.clientX - d.x) > 4) d.moved = true;
     const dvt = -((e.clientX - d.x) / d.w) * (d.vdom[1] - d.vdom[0]);
     setDomain(clampDomain(tr(d.vdom[0] + dvt), tr(d.vdom[1] + dvt)));
   };
-  const chartPointerUp = () => {
+  const chartPointerUp = (e) => {
     if (bandRef.current) {
       const { rect } = bandRef.current;
       bandRef.current = null;
@@ -1556,7 +1829,14 @@ export default function FleetDataAnalyzer() {
       setSelectMode(false);
       return;
     }
+    const d = dragRef.current;
     dragRef.current = null;
+    // a click (no meaningful drag) seeks the shared cursor → animator playhead
+    if (d && !d.moved && activeDomain && e && e.clientX != null) {
+      const frac = Math.min(Math.max((e.clientX - d.rect.left) / d.w, 0), 1);
+      setCursorT(tr(d.vdom[0] + frac * (d.vdom[1] - d.vdom[0])));
+      setPlaying(false);
+    }
   };
 
   const mmTicks = useMemo(() => {
@@ -1592,6 +1872,27 @@ export default function FleetDataAnalyzer() {
     setDomain(clampDomain(d.dom[0] + dt, d.dom[1] + dt));
   };
   const mmPointerUp = () => { mmDragRef.current = null; };
+
+  /* ----- consist animator playback: advances the shared cursor at rate×real-time ----- */
+  const playRef = useRef(null);
+  useEffect(() => {
+    if (!playing || !consistMeta) return;
+    const { t0, t1 } = consistMeta;
+    let last = null;
+    const step = (now) => {
+      if (last == null) last = now;
+      const dt = (now - last) / 1000; last = now;
+      setCursorT((t) => {
+        const base = t == null || t < t0 || t > t1 ? t0 : t;
+        const nt = base + dt * rate * 1000; // rate× real recording time
+        if (nt >= t1) { setPlaying(false); return t1; }
+        return nt;
+      });
+      playRef.current = requestAnimationFrame(step);
+    };
+    playRef.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(playRef.current);
+  }, [playing, rate, consistMeta]);
 
   const loadDemo = () => {
     const d1 = makeDemoVehicle("224", 0), d2 = makeDemoVehicle("211", 95);
@@ -1707,6 +2008,10 @@ export default function FleetDataAnalyzer() {
         {dots.map((d, i) => (
           <ReferenceDot key={i} x={tv(d.x)} y={d.y} r={4.5} fill={d.color} stroke="#ffffff" strokeWidth={1.5} ifOverflow="discard" isFront />
         ))}
+        {cursorT != null && dom && tv(cursorT) >= dom[0] && tv(cursorT) <= dom[1] && (
+          <ReferenceLine x={tv(cursorT)} stroke={C.cyan} strokeWidth={1.6} ifOverflow="hidden"
+            label={{ value: "▶", position: "top", fill: C.cyan, fontSize: 11 }} />
+        )}
       </ComposedChart>
     </ResponsiveContainer>
     );
@@ -1749,13 +2054,13 @@ export default function FleetDataAnalyzer() {
     return (
       <div style={{ border: `1px solid ${C.panelEdge}`, borderTop: "none", overflow: "hidden" }}>
         {scrollable && (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 10px", background: "#f3f3f0", borderBottom: `1px solid ${C.panelEdge}`, fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: C.dim }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 10px", background: "#141b24", borderBottom: `1px solid ${C.panelEdge}`, fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: C.dim }}>
             <span>Fault lanes · {vName} ({lanes.length})</span>
             <span style={{ fontFamily: "'IBM Plex Mono', monospace", textTransform: "none", letterSpacing: 0, fontWeight: 400, fontSize: 9 }}>scroll for more ↓</span>
           </div>
         )}
         <div style={{ maxHeight: scrollable ? 320 : undefined, overflowY: scrollable ? "auto" : undefined }}>
-          {lanes.map((l) => <FaultLane key={l.key} label={l.label} color={l.color} tagColor={v2Active ? VEH[vi].tag : "transparent"} events={l.events} domain={tmap ? vActive : activeDomain} />)}
+          {lanes.map((l) => <FaultLane key={l.key} label={l.label} color={l.color} tagColor={v2Active ? VEH[vi].tag : "transparent"} events={l.events} domain={tmap ? vActive : activeDomain} cursor={cursorT != null ? (tmap ? tv(cursorT) : cursorT) : null} />)}
         </div>
       </div>
     );
@@ -1768,7 +2073,7 @@ export default function FleetDataAnalyzer() {
         const s = resolveSeries(d);
         const pts = tmap ? lanePts(laneRows, d.sig).map((p) => ({ ...p, t: tv(p.t) })) : lanePts(laneRows, d.sig);
         const lfaults = (chartCfg.showFaults ? faults : []).map((f) => (tmap ? { ...f, t: tv(f.t) } : f));
-        return <DigitalLane key={d.cfgKey} label={s.label} color={s.color} tagColor={v2Active ? VEH[vi].tag : "transparent"} pts={pts} domain={tmap ? vActive : activeDomain} faults={lfaults} selFault={selFault} />;
+        return <DigitalLane key={d.cfgKey} label={s.label} color={s.color} tagColor={v2Active ? VEH[vi].tag : "transparent"} pts={pts} domain={tmap ? vActive : activeDomain} faults={lfaults} selFault={selFault} cursor={cursorT != null ? (tmap ? tv(cursorT) : cursorT) : null} />;
       })}
     </div>
   );
@@ -1786,7 +2091,7 @@ export default function FleetDataAnalyzer() {
     canvas.width = W * scale; canvas.height = H * scale;
     const ctx = canvas.getContext("2d");
     ctx.scale(scale, scale);
-    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = C.panel; ctx.fillRect(0, 0, W, H);
     if (chartCfg.title) {
       ctx.fillStyle = C.ink; ctx.font = "700 18px 'Barlow Condensed', sans-serif";
       ctx.fillText(chartCfg.title.toUpperCase(), pad, pad + 16);
@@ -1816,8 +2121,209 @@ export default function FleetDataAnalyzer() {
     });
   };
 
+  /* ---------- LRV consist animator (collapsible, bottom of Timeline) ---------- */
+  const renderAnimator = () => {
+    if (!consist || !consistMeta) return null;
+    const { t0, t1 } = consistMeta;
+    const sim = cursorT == null ? t0 : Math.min(Math.max(cursorT, t0), t1);
+    return (
+      <div style={{ background: C.panel, border: `1px solid ${C.panelEdge}`, borderRadius: 6, overflow: "hidden" }}>
+        <div onClick={() => setAnimOpen((o) => { if (o) setPlaying(false); return !o; })}
+          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "12px 18px", cursor: "pointer", borderBottom: animOpen ? `1px solid ${C.panelEdge}` : "none" }}>
+          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 16, letterSpacing: "0.12em", textTransform: "uppercase", color: C.amber }}>
+            <span style={{ marginRight: 8, display: "inline-block", width: 12 }}>{animOpen ? "▾" : "▸"}</span>Consist Animation
+          </div>
+          <span style={{ fontFamily: MONO, fontSize: 11, color: C.dim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {consist.headerId || name1} · event-recorder playback{consist.present.coupled ? " · consist coupling" : ""}
+          </span>
+        </div>
+        {animOpen && (() => {
+          const dataA = consist.data, present = consist.present;
+          const { vNom } = consistMeta;
+          const st = interpConsist(dataA, sim) || {};
+          const vehLabel = consist.headerId || name1;
+          const partnerLabel = v2Active ? name2 : "MU";
+          const coupledNow = !!(st.coupledA || st.coupledB);
+          const doorsOpen = !!(st.doorsL || st.doorsR);
+          const showPartner = consistMode === "2" || (consistMode === "auto" && (coupledNow || st.partnerPos != null));
+          const partnerCoupled = consistMode === "2" ? true : coupledNow;
+
+          const PX_PER_M = 9, VIEW_W = 1180, VIEW_H = 250, RAIL_Y = 150, CAR_W = 430, COUP = 22;
+          const anchorX = !showPartner ? 375 : (st.partnerSide || "B") === "A" ? 230 : 660;
+          const toScreen = (d) => anchorX + (d - (st.pos || 0)) * PX_PER_M;
+          const wheelAngle = ((st.pos || 0) / 0.33) * 57.2958 % 360;
+
+          let partnerX = null, partnerWheel = wheelAngle, gapM = null;
+          if (showPartner) {
+            const side = st.partnerSide || "B";
+            const off = side === "A" ? CAR_W + COUP : -(CAR_W + COUP);
+            if (partnerCoupled) partnerX = anchorX + off;
+            else if (st.partnerPos != null) {
+              partnerX = toScreen(st.partnerPos) + off;
+              partnerWheel = (st.partnerPos / 0.33) * 57.2958 % 360;
+              gapM = Math.abs((st.pos || 0) - st.partnerPos);
+            } else if (consistMode === "2") partnerX = anchorX - CAR_W - COUP;
+          }
+
+          const vOk = st.lineV > vNom * 0.85 && st.lineV < vNom * 1.2;
+          const vLow = st.lineV <= vNom * 0.85 && st.lineV > vNom * 0.3;
+          const vDead = st.lineV <= vNom * 0.3 || !st.hscb;
+          const vColor = vDead ? C.red : vOk ? C.green : C.amber;
+          const arc = !vDead && vLow && st.speed > 1;
+
+          const dMin = (st.pos || 0) - anchorX / PX_PER_M - 60;
+          const dMax = (st.pos || 0) + (VIEW_W - anchorX) / PX_PER_M + 60;
+          const range = (sp) => { const a = []; for (let d = Math.floor(dMin / sp) * sp; d <= dMax; d += sp) a.push(d); return a; };
+
+          const aFaults = (faultData1 || []).filter((f) => f.t >= t0 && f.t <= t1);
+          const thr = Math.max(1500, (t1 - t0) * 0.0015);
+          const activeFault = aFaults.reduce((best, f) => {
+            const dd = Math.abs(f.t - sim);
+            return dd <= thr && (!best || dd < best.dd) ? { f, dd } : best;
+          }, null)?.f;
+
+          const lamp = (on, color, text) => (
+            <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", background: "#141b24", border: `1px solid ${on ? color : C.faint}`, borderRadius: 6 }}>
+              <span style={{ width: 9, height: 9, borderRadius: 9, background: on ? color : "#3a4654", boxShadow: on ? `0 0 8px ${color}` : "none", transition: "all .25s" }} />
+              <span style={{ fontFamily: MONO, fontSize: 11, color: on ? C.ink : C.dim, letterSpacing: 0.5 }}>{text}</span>
+            </div>
+          );
+
+          const readouts = [
+            ["SPEED", (st.speed || 0).toFixed(1), "mph", st.speed > 0.3 ? C.green : C.ink, true],
+            ["OCS LINE", (st.lineV || 0).toFixed(0), "VDC", vColor, present.lineV],
+            ["BRAKE CYL", (st.brakePress || 0).toFixed(0), "psi", st.brake ? C.red : C.ink, present.brakePress],
+            ["DISTANCE", ((st.pos || 0) / 1000).toFixed(3), "km", C.ink, true],
+            ["TIME", fmtMMSS((sim - t0) / 1000), `/ ${fmtMMSS((t1 - t0) / 1000)}`, C.ink, true],
+          ].filter((r) => r[4]);
+
+          return (
+            <div style={{ padding: 18 }}>
+              {/* readouts */}
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+                {readouts.map(([lab, val, unit, color]) => (
+                  <div key={lab} style={{ background: "#141b24", border: `1px solid ${C.panelEdge}`, borderRadius: 6, padding: "7px 14px", minWidth: 116 }}>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 10, color: C.dim, letterSpacing: "0.14em", textTransform: "uppercase" }}>{lab}</div>
+                    <div style={{ fontFamily: MONO, fontSize: 21, color }}>{val} <span style={{ fontSize: 11, color: C.dim }}>{unit}</span></div>
+                  </div>
+                ))}
+              </div>
+
+              {/* lamps + consist mode */}
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+                {present.doorsL && lamp(st.doorsL, C.amber, "DOORS L")}
+                {present.doorsR && lamp(st.doorsR, C.amber, "DOORS R")}
+                {present.brake && lamp(st.brake, C.red, "BRAKE")}
+                {present.hscb && lamp(st.hscb, C.green, "HSCB")}
+                {present.coupled && lamp(coupledNow, C.cyan, `COUPLED ${st.coupledA ? "A" : st.coupledB ? "B" : ""}`)}
+                {gapM != null && <span style={{ fontFamily: MONO, fontSize: 11, color: C.red }}>SEPARATION {gapM.toFixed(0)} m</span>}
+                <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: C.dim }}>Consist</span>
+                  <Chip active={consistMode === "auto"} onClick={() => setConsistMode("auto")}>Auto (signal)</Chip>
+                  <Chip active={consistMode === "1"} onClick={() => setConsistMode("1")}>1-car</Chip>
+                  <Chip active={consistMode === "2"} onClick={() => setConsistMode("2")}>2-car</Chip>
+                </div>
+              </div>
+
+              {/* scene */}
+              <div style={{ background: "#080d14", border: `1px solid ${C.panelEdge}`, borderRadius: 6, overflow: "hidden" }}>
+                <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} width="100%" style={{ display: "block" }}>
+                  <defs>
+                    <linearGradient id="lrvsky" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stopColor="#0a1230" /><stop offset="1" stopColor="#080d14" />
+                    </linearGradient>
+                  </defs>
+                  <rect width={VIEW_W} height={VIEW_H} fill="url(#lrvsky)" />
+                  {/* catenary: dims when dead */}
+                  <line x1="0" y1="34" x2={VIEW_W} y2="34" stroke={vDead ? "#2A333D" : "#46525E"} strokeWidth="1.5" />
+                  {range(32).map((d) => { const x = toScreen(d); return (
+                    <g key={d}>
+                      <line x1={x} y1={RAIL_Y} x2={x} y2="28" stroke="#2B3540" strokeWidth="4" />
+                      <line x1={x} y1="34" x2={x + 26} y2="34" stroke="#2B3540" strokeWidth="3" />
+                    </g> ); })}
+                  {/* stations */}
+                  {consistMeta.stops.map((d, i) => { const x = toScreen(d); if (x < -800 || x > VIEW_W + 800) return null; return (
+                    <g key={i}>
+                      <rect x={x - 320} y={RAIL_Y - 14} width="640" height="14" fill="#222B34" />
+                      <rect x={x - 320} y={RAIL_Y - 16} width="640" height="3" fill={C.amber} opacity="0.5" />
+                      <text x={x} y={RAIL_Y - 24} textAnchor="middle" fontFamily={MONO} fontSize="11" fill="#7A8794">STOP {i + 1}</text>
+                    </g> ); })}
+                  {/* ties + rail */}
+                  {range(1.6).map((d) => <rect key={d} x={toScreen(d) - 2} y={RAIL_Y + 3} width="4" height="9" fill="#23211C" />)}
+                  <rect x="0" y={RAIL_Y} width={VIEW_W} height="3.5" fill={LRV.rail} />
+                  <rect x="0" y={RAIL_Y + 12} width={VIEW_W} height={VIEW_H - RAIL_Y - 12} fill="#0c1422" />
+                  {range(100).map((d) => d >= 0 && (
+                    <g key={d}>
+                      <line x1={toScreen(d)} y1={RAIL_Y + 14} x2={toScreen(d)} y2={RAIL_Y + 26} stroke="#3A4450" strokeWidth="1.5" />
+                      <text x={toScreen(d) + 4} y={RAIL_Y + 28} fontFamily={MONO} fontSize="10" fill="#4A5663">{(d / 1000).toFixed(1)} km</text>
+                    </g> ))}
+
+                  {/* partner car */}
+                  {showPartner && partnerX != null && (
+                    <LRVCar x={partnerX}
+                      doorsOpen={partnerCoupled ? doorsOpen : false}
+                      pantoUp brake={partnerCoupled ? !!st.brake : true}
+                      wheelAngle={partnerWheel}
+                      label={partnerLabel} arc={false} ghost={!partnerCoupled} />
+                  )}
+                  {/* coupler bar */}
+                  {showPartner && partnerCoupled && partnerX != null && (
+                    <rect x={(st.partnerSide || "B") === "A" ? anchorX + CAR_W - 3 : partnerX + CAR_W - 3}
+                      y={RAIL_Y - 36} width={COUP + 6} height="6" fill="#39434D" />
+                  )}
+                  {/* lead car */}
+                  <LRVCar x={anchorX} doorsOpen={doorsOpen} pantoUp brake={!!st.brake}
+                    wheelAngle={wheelAngle} label={vehLabel} arc={arc} />
+                  {vDead && st.speed > 0.5 && (
+                    <text x={anchorX + CAR_W / 2} y="20" textAnchor="middle" fontFamily={MONO} fontSize="11" fill={C.red}>
+                      ⚠ LINE {st.hscb ? "DE-ENERGIZED" : "HSCB OPEN"}
+                    </text>
+                  )}
+                  {/* fault badge: flashes when the playhead crosses a fault timestamp */}
+                  {activeFault && (
+                    <g>
+                      <rect x={anchorX + CAR_W / 2 - 78} y="6" width="156" height="22" rx="4" fill={VEH[1].fault} opacity="0.95" />
+                      <text x={anchorX + CAR_W / 2} y="21" textAnchor="middle" fontFamily={MONO} fontSize="11" fontWeight="700" fill="#fff">
+                        ⚠ {activeFault.code}{activeFault.desc ? ` · ${activeFault.desc}`.slice(0, 30) : ""}
+                      </text>
+                    </g>
+                  )}
+                </svg>
+              </div>
+
+              {/* transport */}
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
+                <Btn small primary onClick={() => { if (sim >= t1) setCursorT(t0); setPlaying((p) => !p); }}>{playing ? "❚❚ Pause" : "▶ Play"}</Btn>
+                <Btn small onClick={() => { setCursorT(t0); setPlaying(false); }}>⏮ Reset</Btn>
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: C.dim, marginLeft: 4 }}>Rate</span>
+                {[1, 2, 5, 10, 30].map((r) => <Chip key={r} active={rate === r} onClick={() => setRate(r)}>{r}×</Chip>)}
+                {/* scrubber with fault ticks */}
+                <div style={{ flex: 1, minWidth: 220, display: "flex", flexDirection: "column", gap: 2 }}>
+                  <div style={{ position: "relative", height: 9 }}>
+                    {aFaults.map((f, i) => (
+                      <div key={i} title={`${f.code} ${f.desc || ""}`} style={{ position: "absolute", top: 0, bottom: 0, left: `${((f.t - t0) / (t1 - t0 || 1)) * 100}%`, width: 1.5, background: VEH[1].fault, opacity: 0.6 }} />
+                    ))}
+                  </div>
+                  <input type="range" min={t0} max={t1} step={(t1 - t0) / 1500 || 1} value={sim}
+                    onChange={(e) => { setCursorT(+e.target.value); setPlaying(false); }}
+                    style={{ width: "100%", accentColor: C.amber }} />
+                </div>
+              </div>
+
+              <div style={{ fontFamily: MONO, fontSize: 10, color: C.dim, marginTop: 10, lineHeight: 1.6 }}>
+                Playhead is shared with the charts above (cyan line) — scrub or play here to move it, or click a point on the timeline to seek the animation.
+                Signals map from {vehLabel}'s recorder: speed, distance{present.lineV ? ", OCS line voltage" : ""}{present.coupled ? ", mechanical coupling A/B" : ""}{present.hscb ? ", HSCB" : ""}.
+                {present.coupled ? " Consist AUTO follows the coupling signal — coupled shows both cars; uncouple freezes the partner and shows live separation." : " No coupling channel in this file — single car (use 2-car to force a partner)."}
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+    );
+  };
+
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: C.ink, fontFamily: "'IBM Plex Mono', monospace", backgroundImage: "radial-gradient(circle at 20% 0%, rgba(0,153,153,0.05), transparent 40%), repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(20,30,40,0.012) 3px, rgba(20,30,40,0.012) 4px)" }}>
+    <div style={{ minHeight: "100vh", background: C.bg, color: C.ink, fontFamily: "'IBM Plex Mono', monospace", backgroundImage: "radial-gradient(circle at 20% 0%, rgba(63,182,201,0.08), transparent 40%), repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.025) 3px, rgba(255,255,255,0.025) 4px)" }}>
       <style>{FONTS}</style>
 
       <div style={{ borderBottom: `1px solid ${C.panelEdge}`, padding: "18px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
@@ -1928,7 +2434,7 @@ export default function FleetDataAnalyzer() {
 
                   {/* ---------- time sync panel ---------- */}
                   {syncOpen && (
-                    <div style={{ background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 6, padding: 12, marginBottom: 12 }}>
+                    <div style={{ background: "#141b24", border: `1px solid ${C.faint}`, borderRadius: 6, padding: 12, marginBottom: 12 }}>
                       <div style={{ fontSize: 11, color: C.ink, marginBottom: 10, fontFamily: "'IBM Plex Mono', monospace" }}>
                         Fault-log ↔ recorder time alignment. Both files are parsed at full precision (recorder: milliseconds; fault log: 1-second resolution, so ±0.5 s is inherent).
                         If the VCU clock and recorder clock drift, shift the fault timestamps until a fault pulse lines up with its recorder flag edge — positive = faults move later.
@@ -1941,7 +2447,7 @@ export default function FleetDataAnalyzer() {
                           <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: "0.1em", textTransform: "uppercase", color: VEH[v.n].tag, width: 110 }}>{v.name}</span>
                           {[-60, -10, -1, -0.5].map((d) => <Chip key={d} onClick={() => v.setOff(+(v.off + d).toFixed(1))}>{d}s</Chip>)}
                           <input type="number" step="0.1" value={v.off} onChange={(e) => v.setOff(e.target.value === "" ? 0 : +e.target.value)}
-                            style={{ width: 90, background: "#fff", color: v.off !== 0 ? C.amber : C.ink, fontWeight: v.off !== 0 ? 600 : 400, border: `1px solid ${v.off !== 0 ? C.amber : C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none", textAlign: "center" }} />
+                            style={{ width: 90, background: "#1f2730", color: v.off !== 0 ? C.amber : C.ink, fontWeight: v.off !== 0 ? 600 : 400, border: `1px solid ${v.off !== 0 ? C.amber : C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none", textAlign: "center" }} />
                           <span style={{ fontSize: 10, color: C.dim }}>sec</span>
                           {[0.5, 1, 10, 60].map((d) => <Chip key={d} onClick={() => v.setOff(+(v.off + d).toFixed(1))}>+{d}s</Chip>)}
                           <Chip onClick={() => v.setOff(0)} color={C.red}>reset</Chip>
@@ -1956,16 +2462,16 @@ export default function FleetDataAnalyzer() {
 
                   {/* ---------- time range panel ---------- */}
                   {rangeOpen && (
-                    <div style={{ background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 6, padding: 12, marginBottom: 12, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+                    <div style={{ background: "#141b24", border: `1px solid ${C.faint}`, borderRadius: 6, padding: 12, marginBottom: 12, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
                       <div>
                         <Label>From</Label>
                         <input type="datetime-local" step="1" value={rangeFrom} onChange={(e) => setRangeFrom(e.target.value)}
-                          style={{ background: "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
+                          style={{ background: "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
                       </div>
                       <div>
                         <Label>To</Label>
                         <input type="datetime-local" step="1" value={rangeTo} onChange={(e) => setRangeTo(e.target.value)}
-                          style={{ background: "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
+                          style={{ background: "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
                       </div>
                       <Btn small primary onClick={applyRange}>Apply</Btn>
                       <div style={{ display: "flex", gap: 6, alignItems: "center", paddingBottom: 2 }}>
@@ -1980,27 +2486,27 @@ export default function FleetDataAnalyzer() {
 
                   {/* ---------- edit panel ---------- */}
                   {editOpen && (
-                    <div style={{ background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 6, padding: 14, marginBottom: 12 }}>
+                    <div style={{ background: "#141b24", border: `1px solid ${C.faint}`, borderRadius: 6, padding: 14, marginBottom: 12 }}>
                       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 12 }}>
                         <div style={{ flex: "2 1 220px" }}>
                           <Label>Graph title</Label>
                           <input value={chartCfg.title} onChange={(e) => setChartCfg({ ...chartCfg, title: e.target.value })} placeholder="e.g. Car 224 — ATP Safety Brake events vs speed"
-                            style={{ width: "100%", boxSizing: "border-box", background: "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
+                            style={{ width: "100%", boxSizing: "border-box", background: "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
                         </div>
                         <div style={{ flex: "0 0 90px" }}>
                           <Label>Y min</Label>
                           <input value={chartCfg.yMin} disabled={normalize} onChange={(e) => setChartCfg({ ...chartCfg, yMin: e.target.value })} placeholder="auto"
-                            style={{ width: "100%", boxSizing: "border-box", background: normalize ? "#e8e8e3" : "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
+                            style={{ width: "100%", boxSizing: "border-box", background: normalize ? "#161d26" : "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
                         </div>
                         <div style={{ flex: "0 0 90px" }}>
                           <Label>Y max</Label>
                           <input value={chartCfg.yMax} disabled={normalize} onChange={(e) => setChartCfg({ ...chartCfg, yMax: e.target.value })} placeholder="auto"
-                            style={{ width: "100%", boxSizing: "border-box", background: normalize ? "#e8e8e3" : "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
+                            style={{ width: "100%", boxSizing: "border-box", background: normalize ? "#161d26" : "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
                         </div>
                         <div style={{ flex: "0 0 150px" }}>
                           <Label>Fault display</Label>
                           <select value={chartCfg.faultStyle} onChange={(e) => setChartCfg({ ...chartCfg, faultStyle: e.target.value })}
-                            style={{ width: "100%", background: "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 8px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }}>
+                            style={{ width: "100%", background: "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 8px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }}>
                             <option value="overlay">overlay signal</option>
                             <option value="markers">marker lines</option>
                             <option value="both">both</option>
@@ -2029,22 +2535,22 @@ export default function FleetDataAnalyzer() {
                           return (
                             <React.Fragment key={d.cfgKey}>
                               <input value={o.label ?? d.cfgKey} onChange={(e) => updateSeries(d.cfgKey, { label: e.target.value })}
-                                style={{ background: "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 3, padding: "5px 8px", fontFamily: "inherit", fontSize: 11, outline: "none", minWidth: 0 }} />
+                                style={{ background: "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 3, padding: "5px 8px", fontFamily: "inherit", fontSize: 11, outline: "none", minWidth: 0 }} />
                               <input type="color" value={cur.color} onChange={(e) => updateSeries(d.cfgKey, { color: e.target.value })}
-                                style={{ width: 36, height: 26, padding: 0, border: `1px solid ${C.faint}`, borderRadius: 3, background: "#fff", cursor: "pointer" }} />
+                                style={{ width: 36, height: 26, padding: 0, border: `1px solid ${C.faint}`, borderRadius: 3, background: "#1f2730", cursor: "pointer" }} />
                               <select value={o.style || (d.defDash ? "dashed" : "solid")} onChange={(e) => updateSeries(d.cfgKey, { style: e.target.value })}
-                                style={{ background: "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 3, padding: "5px 6px", fontFamily: "inherit", fontSize: 11, outline: "none" }}>
+                                style={{ background: "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 3, padding: "5px 6px", fontFamily: "inherit", fontSize: 11, outline: "none" }}>
                                 {["solid", "dashed", "dotted"].map((s) => <option key={s} value={s}>{s}</option>)}
                               </select>
                               <select value={o.curve || "linear"} onChange={(e) => updateSeries(d.cfgKey, { curve: e.target.value })}
-                                style={{ background: "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 3, padding: "5px 6px", fontFamily: "inherit", fontSize: 11, outline: "none" }}>
+                                style={{ background: "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 3, padding: "5px 6px", fontFamily: "inherit", fontSize: 11, outline: "none" }}>
                                 <option value="linear">line</option>
                                 <option value="smooth">smooth</option>
                                 <option value="step">step</option>
                                 <option value="area">area</option>
                               </select>
                               <select value={String(o.width || 1.6)} onChange={(e) => updateSeries(d.cfgKey, { width: e.target.value })}
-                                style={{ background: "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 3, padding: "5px 6px", fontFamily: "inherit", fontSize: 11, outline: "none" }}>
+                                style={{ background: "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 3, padding: "5px 6px", fontFamily: "inherit", fontSize: 11, outline: "none" }}>
                                 {["1", "1.6", "2.5", "3.5"].map((w) => <option key={w} value={w}>{w}px</option>)}
                               </select>
                               <input type="checkbox" checked={!!o.dots} onChange={(e) => updateSeries(d.cfgKey, { dots: e.target.checked })} style={{ accentColor: cur.color, justifySelf: "start", cursor: "pointer" }} />
@@ -2067,7 +2573,7 @@ export default function FleetDataAnalyzer() {
                     const frac = ov / win;
                     if (frac >= 0.15) return null;
                     return (
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#fdf6e7", border: `1px solid ${C.amber}`, borderRadius: 4, padding: "7px 12px", marginBottom: 8, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", color: C.ink }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#2a2410", border: `1px solid ${C.amber}`, borderRadius: 4, padding: "7px 12px", marginBottom: 8, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", color: C.ink }}>
                         <span style={{ color: C.amber, fontWeight: 700 }}>⚠</span>
                         {ov === 0
                           ? <span>No recorder data in this window — only fault markers are available here. Recorder coverage: {fmtFull(recSpan[0])} → {fmtFull(recSpan[1])}.</span>
@@ -2082,7 +2588,7 @@ export default function FleetDataAnalyzer() {
                     onPointerUp={chartPointerUp} onPointerLeave={chartPointerUp}
                     style={{ cursor: selectMode ? "crosshair" : "grab", touchAction: "pan-y", userSelect: "none", position: "relative" }}>
                     {band && (
-                      <div style={{ position: "absolute", top: 0, bottom: 0, left: band.x1, width: Math.max(band.x2 - band.x1, 1), background: "rgba(0,153,153,0.12)", border: `1px solid ${C.amber}`, pointerEvents: "none", zIndex: 5 }} />
+                      <div style={{ position: "absolute", top: 0, bottom: 0, left: band.x1, width: Math.max(band.x2 - band.x1, 1), background: "rgba(63,182,201,0.18)", border: `1px solid ${C.amber}`, pointerEvents: "none", zIndex: 5 }} />
                     )}
                     {(!v2Active || viewMode === "combined") ? (
                       <>
@@ -2109,7 +2615,7 @@ export default function FleetDataAnalyzer() {
                   {/* minimap: spans the recorder recording */}
                   {navFull && (
                     <div onPointerDown={mmPointerDown} onPointerMove={mmPointerMove} onPointerUp={mmPointerUp} onPointerLeave={mmPointerUp}
-                      style={{ position: "relative", height: 36, background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 4, marginTop: 10, touchAction: "none", cursor: "pointer", overflow: "hidden", userSelect: "none" }}>
+                      style={{ position: "relative", height: 36, background: "#141b24", border: `1px solid ${C.faint}`, borderRadius: 4, marginTop: 10, touchAction: "none", cursor: "pointer", overflow: "hidden", userSelect: "none" }}>
                       {[{ span: recSpan1, col: VEH[1].tag }, { span: recSpan2, col: VEH[2].tag }].map((b, i) => b.span && (
                         <div key={i} style={{
                           position: "absolute", top: i === 0 ? 0 : "50%", height: v2Active ? "50%" : "100%", bottom: 0,
@@ -2125,7 +2631,7 @@ export default function FleetDataAnalyzer() {
                         position: "absolute", top: 0, bottom: 0,
                         left: `${((activeDomain[0] - navFull[0]) / (navFull[1] - navFull[0])) * 100}%`,
                         width: `${Math.max(((activeDomain[1] - activeDomain[0]) / (navFull[1] - navFull[0])) * 100, 0.6)}%`,
-                        background: "rgba(0,153,153,0.10)", border: `1px solid ${C.amber}`, borderRadius: 3, cursor: "grab",
+                        background: "rgba(63,182,201,0.14)", border: `1px solid ${C.amber}`, borderRadius: 3, cursor: "grab",
                       }} />
                       <div style={{ position: "absolute", left: 6, bottom: 2, fontSize: 9, color: C.dim, fontFamily: "'IBM Plex Mono', monospace", pointerEvents: "none" }}>{fmtFull(navFull[0])}</div>
                       <div style={{ position: "absolute", right: 6, bottom: 2, fontSize: 9, color: C.dim, fontFamily: "'IBM Plex Mono', monospace", pointerEvents: "none" }}>{fmtFull(navFull[1])}</div>
@@ -2134,7 +2640,7 @@ export default function FleetDataAnalyzer() {
 
                   {/* ---------- signal snapshot at selected fault ---------- */}
                   {selSnapshot && (
-                    <div style={{ background: "#f3f3f0", border: `1px solid ${C.amber}`, borderRadius: 6, padding: 12, marginTop: 10 }}>
+                    <div style={{ background: "#141b24", border: `1px solid ${C.amber}`, borderRadius: 6, padding: 12, marginTop: 10 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
                         <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>
                           <span style={{ color: VEH[selSnapshot.vi].fault, fontWeight: 600 }}>{selSnapshot.f.code}</span>
@@ -2157,7 +2663,7 @@ export default function FleetDataAnalyzer() {
                           </div>
                           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                             {selSnapshot.rows.map(({ s, v, binary }) => (
-                              <div key={s} style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", border: `1px solid ${C.panelEdge}`, borderLeft: `3px solid ${seriesColorOf(selSnapshot.vi, s)}`, borderRadius: 4, padding: "5px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }}>
+                              <div key={s} style={{ display: "flex", alignItems: "center", gap: 6, background: "#1f2730", border: `1px solid ${C.panelEdge}`, borderLeft: `3px solid ${seriesColorOf(selSnapshot.vi, s)}`, borderRadius: 4, padding: "5px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }}>
                                 <span style={{ color: C.dim, maxWidth: 190, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s}>{s}</span>
                                 <span style={{ color: binary ? (v >= 0.5 ? C.green : C.red) : C.ink, fontWeight: 600 }}>
                                   {v == null ? "—" : binary ? (v >= 0.5 ? "HIGH (1)" : "LOW (0)") : v.toLocaleString(undefined, { maximumFractionDigits: 3 })}
@@ -2197,7 +2703,7 @@ export default function FleetDataAnalyzer() {
                         {(sel.length > 0 || q) && <span onClick={() => { clearSel(); setSearch(""); }} style={{ color: C.amber, fontSize: 11, cursor: "pointer" }}>clear ✕</span>}
                       </div>
                       <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${srcKey === "vcu" ? "VCU" : "Expert"} faults… code, description, time`}
-                        style={{ width: "100%", boxSizing: "border-box", background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none", marginBottom: 8 }} />
+                        style={{ width: "100%", boxSizing: "border-box", background: "#141b24", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none", marginBottom: 8 }} />
                       <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
                         {listFaults.slice(0, 800).map((f) => {
                           const key = `${f.vi}-${f.id}`;
@@ -2207,7 +2713,7 @@ export default function FleetDataAnalyzer() {
                             <div key={key} onClick={() => zoomToFault(f)}
                               style={{
                                 padding: "8px 10px", borderRadius: 4, cursor: "pointer",
-                                background: key === selFault ? "#e3f3f3" : "#f3f3f0",
+                                background: key === selFault ? "#1b2e34" : "#141b24",
                                 border: `1px solid ${key === selFault ? C.amber : C.faint}`,
                                 borderLeft: `3px solid ${VEH[f.vi].tag}`,
                                 opacity: inRec ? 1 : 0.55,
@@ -2231,6 +2737,9 @@ export default function FleetDataAnalyzer() {
                   );
                 })}
               </div>
+
+              {/* ---------- LRV consist animator ---------- */}
+              {renderAnimator()}
             </div>
           )}
 
@@ -2256,9 +2765,9 @@ export default function FleetDataAnalyzer() {
                     {aiProvider === "ollama" && (
                       <>
                         <input value={ollamaUrl} onChange={(e) => setOllamaUrl(e.target.value)} placeholder="http://localhost:11434"
-                          style={{ width: 210, background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
+                          style={{ width: 210, background: "#141b24", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
                         <input value={ollamaModel} onChange={(e) => setOllamaModel(e.target.value)} placeholder="model e.g. sacrt-analyst-r1" list="ollama-models"
-                          style={{ width: 170, background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
+                          style={{ width: 170, background: "#141b24", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
                         <datalist id="ollama-models">{ollamaModels.map((m) => <option key={m} value={m} />)}</datalist>
                         <Btn small onClick={listOllamaModels}>List models</Btn>
                         <Chip active={autoAnalyze} onClick={() => setAutoAnalyze(!autoAnalyze)} color={C.green}>Auto-analyze on load</Chip>
@@ -2270,7 +2779,7 @@ export default function FleetDataAnalyzer() {
                       {aiMessages.map((m, i) => (
                         <div key={i} style={{
                           alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "85%",
-                          background: m.role === "user" ? "#e3f3f3" : "#f3f3f0",
+                          background: m.role === "user" ? "#1b2e34" : "#141b24",
                           border: `1px solid ${m.role === "user" ? C.amber : C.panelEdge}`,
                           borderRadius: 6, padding: "8px 12px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: C.ink, whiteSpace: "pre-wrap",
                         }}>{m.content}</div>
@@ -2289,7 +2798,7 @@ export default function FleetDataAnalyzer() {
                     <input value={aiInput} onChange={(e) => setAiInput(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") askAi(); }}
                       placeholder={selFault ? "Ask about the selected event or the fault history…" : "Ask anything about the fault data… (select an event on the Timeline for event-specific answers)"}
-                      style={{ flex: 1, background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "9px 12px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
+                      style={{ flex: 1, background: "#141b24", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "9px 12px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
                     <Btn small primary disabled={aiBusy || !aiInput.trim()} onClick={() => askAi()}>{aiBusy ? "…" : "Ask"}</Btn>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, gap: 10, flexWrap: "wrap" }}>
@@ -2314,7 +2823,7 @@ export default function FleetDataAnalyzer() {
                         {setupOpen ? "Hide setup guide" : "First time? Click here for setup instructions (one-time, ~10 min)"}
                       </span>
                       {setupOpen && (
-                        <div style={{ marginTop: 8, background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 4, padding: "12px 14px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: C.ink }}>
+                        <div style={{ marginTop: 8, background: "#141b24", border: `1px solid ${C.faint}`, borderRadius: 4, padding: "12px 14px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: C.ink }}>
                           <div style={{ fontWeight: 700, marginBottom: 8, color: C.petrol }}>RUN THE AI ON YOUR OWN PC — your data never leaves your machine</div>
 
                           <div style={{ fontWeight: 600, marginBottom: 2 }}>1 · Install Ollama</div>
@@ -2342,13 +2851,13 @@ export default function FleetDataAnalyzer() {
                     </div>
                   )}
                   {aiProvider === "claude" && aiKeyOpen && (
-                    <div style={{ marginTop: 8, background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 4, padding: 10 }}>
+                    <div style={{ marginTop: 8, background: "#141b24", border: `1px solid ${C.faint}`, borderRadius: 4, padding: 10 }}>
                       <div style={{ fontSize: 10, color: C.dim, fontFamily: "'IBM Plex Mono', monospace", marginBottom: 6 }}>
                         Hosting this outside Claude.ai (e.g. GitHub Pages)? Enter an Anthropic API key (console.anthropic.com). It is kept in memory only — never saved, never sent anywhere except api.anthropic.com. Do NOT hardcode it into the source or commit it to the repo.
                       </div>
                       <input type="password" value={aiKey} onChange={(e) => setAiKey(e.target.value)} placeholder="sk-ant-…"
                         autoComplete="off"
-                        style={{ width: "100%", boxSizing: "border-box", background: "#fff", color: C.ink, border: `1px solid ${aiKey ? C.green : C.faint}`, borderRadius: 4, padding: "8px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
+                        style={{ width: "100%", boxSizing: "border-box", background: "#1f2730", color: C.ink, border: `1px solid ${aiKey ? C.green : C.faint}`, borderRadius: 4, padding: "8px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
                     </div>
                   )}
                 </div>
@@ -2381,7 +2890,7 @@ export default function FleetDataAnalyzer() {
                           <CartesianGrid stroke={C.faint} strokeDasharray="2 6" vertical={false} />
                           <XAxis dataKey="code" stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} interval={0} angle={-30} textAnchor="end" height={55} />
                           <YAxis stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} allowDecimals={false} width={40} />
-                          <Tooltip content={<DarkTooltip />} cursor={{ fill: "rgba(0,0,0,0.05)" }} />
+                          <Tooltip content={<DarkTooltip />} cursor={{ fill: "rgba(255,255,255,0.06)" }} />
                           <Bar dataKey="count" onClick={(d) => { const code = d?.code ?? d?.payload?.code; if (code != null) { toggleCode(code); setTab("timeline"); } }} cursor="pointer" isAnimationActive={false}>
                             {stats.pareto.slice(0, 12).map((e, i) => (
                               <Cell key={i} fill={visExpert.includes(e.code) || visVcu.includes(e.code) ? C.amber : C.red} fillOpacity={0.85} />
@@ -2398,7 +2907,7 @@ export default function FleetDataAnalyzer() {
                           <CartesianGrid stroke={C.faint} strokeDasharray="2 6" vertical={false} />
                           <XAxis dataKey="t" stroke={C.dim} tickFormatter={(t) => (stats.hourly ? fmtTime(t, 3600000) : fmtDay(t))} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} />
                           <YAxis stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} allowDecimals={false} width={40} />
-                          <Tooltip content={<DarkTooltip />} cursor={{ fill: "rgba(0,0,0,0.05)" }} />
+                          <Tooltip content={<DarkTooltip />} cursor={{ fill: "rgba(255,255,255,0.06)" }} />
                           <Bar dataKey="count" name="faults" fill={C.cyan} fillOpacity={0.85} isAnimationActive={false} />
                         </BarChart>
                       </ResponsiveContainer>
@@ -2433,7 +2942,7 @@ export default function FleetDataAnalyzer() {
                                   <CartesianGrid stroke={C.faint} strokeDasharray="2 6" horizontal={false} />
                                   <XAxis type="number" stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} allowDecimals={false} />
                                   <YAxis type="category" dataKey="code" stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} width={62} />
-                                  <Tooltip content={<DarkTooltip />} cursor={{ fill: "rgba(0,0,0,0.05)" }} />
+                                  <Tooltip content={<DarkTooltip />} cursor={{ fill: "rgba(255,255,255,0.06)" }} />
                                   <Bar dataKey="lead" name="cascades led" fill={C.violet} fillOpacity={0.85} isAnimationActive={false}
                                     onClick={(d) => { const code = d?.code ?? d?.payload?.code; if (code != null) { toggleCode(code); setTab("timeline"); } }} cursor="pointer" />
                                 </BarChart>
@@ -2461,7 +2970,7 @@ export default function FleetDataAnalyzer() {
                                         const v = cascade.cellVal(r, cc);
                                         const diag = r === cc;
                                         const op = v > 0 && cascade.maxPair ? 0.12 + 0.88 * (v / cascade.maxPair) : 0;
-                                        const bg = diag ? "#ecebf6" : `rgba(0,153,153,${op})`;
+                                        const bg = diag ? "#221f33" : `rgba(63,182,201,${op})`;
                                         return (
                                           <td key={cc} title={diag ? `${r}: appears in ${v} cascade${v === 1 ? "" : "s"}` : `${r} + ${cc}: ${v} shared incident${v === 1 ? "" : "s"}`}
                                             style={{ width: 26, height: 24, textAlign: "center", fontSize: 9, background: bg, color: !diag && op > 0.55 ? "#fff" : C.dim, border: `1px solid ${C.panelEdge}` }}>
@@ -2518,7 +3027,7 @@ export default function FleetDataAnalyzer() {
                       </thead>
                       <tbody>
                         {stats.pareto.slice(0, 60).map((p) => (
-                          <tr key={p.code} style={{ borderBottom: `1px solid ${C.panelEdge}`, cursor: "pointer", background: visExpert.includes(p.code) || visVcu.includes(p.code) ? "#e3f3f3" : "transparent" }}
+                          <tr key={p.code} style={{ borderBottom: `1px solid ${C.panelEdge}`, cursor: "pointer", background: visExpert.includes(p.code) || visVcu.includes(p.code) ? "#1b2e34" : "transparent" }}
                             onClick={() => toggleCode(p.code)}>
                             <td style={{ padding: "7px 10px", color: C.red, fontWeight: 600 }}>{p.code}</td>
                             <td style={{ padding: "7px 10px", color: C.ink }}>{p.desc || "—"}</td>
