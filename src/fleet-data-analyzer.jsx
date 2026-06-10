@@ -1522,7 +1522,7 @@ export default function FleetDataAnalyzer() {
   const buildAiContext = () => {
     const L = [];
     L.push(`Fleet: light-rail vehicles. Vehicle 1: ${name1}${v2Active ? `, Vehicle 2: ${name2}` : ""}.`);
-    if (recSpan) L.push(`TELOC event recorder coverage: ${fmtFull(recSpan[0])} to ${fmtFull(recSpan[1])}. Plotted signals: ${[...(rec1?.signals || []), ...(rec2?.signals || [])].slice(0, 14).join(", ")}.`);
+    if (recSpan) L.push(`TELOC event recorder coverage: ${fmtFull(recSpan[0])} to ${fmtFull(recSpan[1])}. Plotted signals: ${[...(rec1?.signals || []), ...(rec2?.signals || [])].slice(0, 14).join(", ")}. IMPORTANT: the recorder only captured this span — faults timestamped outside it have NO signal/speed data, so state at those instants is genuinely unknown (say so; do not infer). Faults inside it carry an "ER@..." snapshot of the actual recorder signal values at the fault instant below.`);
 
     /* per-source summaries */
     for (const srcKey of ["expert", "vcu"]) {
@@ -1565,15 +1565,39 @@ export default function FleetDataAnalyzer() {
     opsFor(recData1, rec1, binSet1, name1);
     if (v2Active) opsFor(recData2, rec2, binSet2, name2);
 
-    /* window fault detail with operational context */
+    /* nearest recorder signal snapshot at an arbitrary instant (null if outside coverage) */
+    const snapAt = (vi, t) => {
+      const recD = vi === 1 ? recData1 : recData2;
+      const recCfg = vi === 1 ? rec1 : rec2;
+      const binSet = vi === 1 ? binSet1 : binSet2;
+      if (!recD?.length || t < recD[0].t || t > recD[recD.length - 1].t) return null;
+      let lo = 0, hi = recD.length - 1;
+      while (hi - lo > 1) { const m = (lo + hi) >> 1; if (recD[m].t <= t) lo = m; else hi = m; }
+      const near = Math.abs(recD[lo].t - t) <= Math.abs(recD[hi].t - t) ? lo : hi;
+      const row = recD[near];
+      // lead with speed channels, then the rest, capped to keep the prompt compact
+      const sigs = [...(recCfg?.signals || [])].sort((a, b) => (/speed/i.test(b) ? 1 : 0) - (/speed/i.test(a) ? 1 : 0)).slice(0, 6);
+      const parts = sigs.map((s) => {
+        const v = row[s];
+        if (v == null) return null;
+        return `${s}=${binSet.has(s) ? (v >= 0.5 ? "HIGH" : "LOW") : (typeof v === "number" ? v.toLocaleString(undefined, { maximumFractionDigits: 1 }) : v)}`;
+      }).filter(Boolean);
+      return parts.length ? { dt: row.t - t, str: parts.join(", ") } : null;
+    };
+
+    /* window fault detail with operational context + per-fault recorder snapshot */
     const winF = [...visibleFaults1, ...visibleFaults2].sort((a, b) => a.t - b.t).slice(0, 50);
     if (winF.length && activeDomain) {
-      L.push(`Faults intersecting the current analysis window ${fmtFull(activeDomain[0])} to ${fmtFull(activeDomain[1])}:\n` +
-        winF.map((f) => `${fmtFull(f.t)} [${f.src === "vcu" ? "VCU" : "EXP"}] ${f.code} ${f.desc}` +
-          (f.tEnd != null ? ` (duration ${fmtDur(f.tEnd - f.t)})` : "") +
-          (f.open ? " (STILL ACTIVE)" : "") +
-          (f.spd != null ? ` @${f.spd.toFixed(0)}mph` : "") +
-          (f.up != null ? ` VCU-uptime ${Math.round(f.up)}s` : "")).join("\n"));
+      L.push(`Faults intersecting the current analysis window ${fmtFull(activeDomain[0])} to ${fmtFull(activeDomain[1])} (ER@ = real event-recorder signal values at the fault instant; "outside recorder coverage" = no signal data there):\n` +
+        winF.map((f) => {
+          const snap = snapAt(f.vi, f.t);
+          return `${fmtFull(f.t)} [${f.src === "vcu" ? "VCU" : "EXP"}] ${f.code} ${f.desc}` +
+            (f.tEnd != null ? ` (duration ${fmtDur(f.tEnd - f.t)})` : "") +
+            (f.open ? " (STILL ACTIVE)" : "") +
+            (f.spd != null ? ` @${f.spd.toFixed(0)}mph(log)` : "") +
+            (f.up != null ? ` VCU-uptime ${Math.round(f.up)}s` : "") +
+            (snap ? ` | ER@${(snap.dt / 1000).toFixed(1)}s: ${snap.str}` : " | ER: outside recorder coverage");
+        }).join("\n"));
       /* clusters: events within 120s of each other often share one incident */
       const clusters = [];
       let cur = [winF[0]];
@@ -1600,7 +1624,7 @@ export default function FleetDataAnalyzer() {
       L.push(sel);
     }
     if (offset1 !== 0 || offset2 !== 0) L.push(`Time-sync offsets applied to fault timestamps: V1 ${offset1}s, V2 ${offset2}s.`);
-    return L.join("\n\n").slice(0, 12000);
+    return L.join("\n\n").slice(0, 16000);
   };
 
   const askAi = async (q) => {
@@ -2226,45 +2250,64 @@ export default function FleetDataAnalyzer() {
               </div>
 
               {/* scene — daylight */}
-              <div style={{ background: "#dfeaf2", border: `1px solid ${C.panelEdge}`, borderRadius: 6, overflow: "hidden" }}>
+              <div style={{ background: "#cfe0ee", border: `1px solid ${C.panelEdge}`, borderRadius: 6, overflow: "hidden" }}>
                 <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} width="100%" style={{ display: "block" }}>
                   <defs>
                     <linearGradient id="lrvsky" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0" stopColor="#9ec3e6" /><stop offset="1" stopColor="#e8f1f8" />
+                      <stop offset="0" stopColor="#5d9bd4" /><stop offset="0.55" stopColor="#9ec6e8" /><stop offset="1" stopColor="#dcecf7" />
                     </linearGradient>
+                    <linearGradient id="lrvballast" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stopColor="#c9b894" /><stop offset="1" stopColor="#ad9b76" />
+                    </linearGradient>
+                    {/* crisp dark edge so the silver car reads against the bright sky */}
+                    <filter id="lrvCarShadow" x="-8%" y="-8%" width="116%" height="124%">
+                      <feDropShadow dx="0" dy="3" stdDeviation="3.2" floodColor="#15233a" floodOpacity="0.45" />
+                    </filter>
                   </defs>
                   <rect width={VIEW_W} height={VIEW_H} fill="url(#lrvsky)" />
+                  {/* distance haze near the horizon */}
+                  <rect x="0" y={RAIL_Y - 46} width={VIEW_W} height="46" fill="#ffffff" opacity="0.18" />
                   {/* catenary: lightens (fades) when dead */}
-                  <line x1="0" y1="34" x2={VIEW_W} y2="34" stroke={vDead ? "#c2cad2" : "#6e7a86"} strokeWidth="1.5" />
+                  <line x1="0" y1="34" x2={VIEW_W} y2="34" stroke={vDead ? "#aab4be" : "#4f5b68"} strokeWidth="1.5" />
                   {range(32).map((d) => { const x = toScreen(d); return (
                     <g key={d}>
-                      <line x1={x} y1={RAIL_Y} x2={x} y2="28" stroke="#9aa6b2" strokeWidth="4" />
-                      <line x1={x} y1="34" x2={x + 26} y2="34" stroke="#9aa6b2" strokeWidth="3" />
+                      <line x1={x} y1={RAIL_Y} x2={x} y2="28" stroke="#586675" strokeWidth="4" />
+                      <line x1={x} y1="34" x2={x + 26} y2="34" stroke="#586675" strokeWidth="3" />
                     </g> ); })}
                   {/* stations — warm concrete platform */}
                   {consistMeta.stops.map((d, i) => { const x = toScreen(d); if (x < -800 || x > VIEW_W + 800) return null; return (
                     <g key={i}>
-                      <rect x={x - 320} y={RAIL_Y - 14} width="640" height="14" fill="#d6cebf" />
-                      <rect x={x - 320} y={RAIL_Y - 16} width="640" height="3" fill={C.amber} opacity="0.6" />
-                      <text x={x} y={RAIL_Y - 24} textAnchor="middle" fontFamily={MONO} fontSize="11" fill="#7a7060">STOP {i + 1}</text>
+                      <rect x={x - 320} y={RAIL_Y - 14} width="640" height="14" fill="#cabda6" />
+                      <rect x={x - 320} y={RAIL_Y - 2} width="640" height="4" fill="#a99c80" />
+                      <rect x={x - 320} y={RAIL_Y - 16} width="640" height="3" fill={C.amber} opacity="0.7" />
+                      <text x={x} y={RAIL_Y - 24} textAnchor="middle" fontFamily={MONO} fontSize="11" fill="#6b6151">STOP {i + 1}</text>
                     </g> ); })}
                   {/* warm ballast bed, wooden ties + steel rail */}
-                  <rect x="0" y={RAIL_Y + 12} width={VIEW_W} height={VIEW_H - RAIL_Y - 12} fill="#cdbfa7" />
-                  {range(1.6).map((d) => <rect key={d} x={toScreen(d) - 2} y={RAIL_Y + 3} width="4" height="9" fill="#9c7b54" />)}
-                  <rect x="0" y={RAIL_Y} width={VIEW_W} height="3.5" fill="#9097a0" />
+                  <rect x="0" y={RAIL_Y + 12} width={VIEW_W} height={VIEW_H - RAIL_Y - 12} fill="url(#lrvballast)" />
+                  {range(1.6).map((d) => <rect key={d} x={toScreen(d) - 2} y={RAIL_Y + 3} width="4" height="9" fill="#7a5733" />)}
+                  <rect x="0" y={RAIL_Y} width={VIEW_W} height="3.5" fill="#6b7480" />
+                  <rect x="0" y={RAIL_Y} width={VIEW_W} height="1" fill="#aab2bc" />
                   {range(100).map((d) => d >= 0 && (
                     <g key={d}>
-                      <line x1={toScreen(d)} y1={RAIL_Y + 14} x2={toScreen(d)} y2={RAIL_Y + 26} stroke="#b0a279" strokeWidth="1.5" />
-                      <text x={toScreen(d) + 4} y={RAIL_Y + 28} fontFamily={MONO} fontSize="10" fill="#8a7f6a">{(d / 1000).toFixed(1)} km</text>
+                      <line x1={toScreen(d)} y1={RAIL_Y + 14} x2={toScreen(d)} y2={RAIL_Y + 26} stroke="#8f8364" strokeWidth="1.5" />
+                      <text x={toScreen(d) + 4} y={RAIL_Y + 28} fontFamily={MONO} fontSize="10" fill="#6f6450">{(d / 1000).toFixed(1)} km</text>
                     </g> ))}
+
+                  {/* ground contact shadows */}
+                  {showPartner && partnerX != null && (
+                    <ellipse cx={partnerX + CAR_W / 2} cy={RAIL_Y + 9} rx={CAR_W * 0.46} ry="5.5" fill="#15233a" opacity={partnerCoupled ? 0.16 : 0.1} />
+                  )}
+                  <ellipse cx={anchorX + CAR_W / 2} cy={RAIL_Y + 9} rx={CAR_W * 0.46} ry="5.5" fill="#15233a" opacity="0.16" />
 
                   {/* partner car */}
                   {showPartner && partnerX != null && (
-                    <LRVCar x={partnerX}
-                      doorsOpen={partnerCoupled ? doorsOpen : false}
-                      pantoUp brake={partnerCoupled ? !!st.brake : true}
-                      wheelAngle={partnerWheel}
-                      label={partnerLabel} arc={false} ghost={!partnerCoupled} />
+                    <g filter="url(#lrvCarShadow)">
+                      <LRVCar x={partnerX}
+                        doorsOpen={partnerCoupled ? doorsOpen : false}
+                        pantoUp brake={partnerCoupled ? !!st.brake : true}
+                        wheelAngle={partnerWheel}
+                        label={partnerLabel} arc={false} ghost={!partnerCoupled} />
+                    </g>
                   )}
                   {/* coupler bar */}
                   {showPartner && partnerCoupled && partnerX != null && (
@@ -2272,10 +2315,12 @@ export default function FleetDataAnalyzer() {
                       y={RAIL_Y - 36} width={COUP + 6} height="6" fill="#39434D" />
                   )}
                   {/* lead car */}
-                  <LRVCar x={anchorX} doorsOpen={doorsOpen} pantoUp brake={!!st.brake}
-                    wheelAngle={wheelAngle} label={vehLabel} arc={arc} />
+                  <g filter="url(#lrvCarShadow)">
+                    <LRVCar x={anchorX} doorsOpen={doorsOpen} pantoUp brake={!!st.brake}
+                      wheelAngle={wheelAngle} label={vehLabel} arc={arc} />
+                  </g>
                   {vDead && st.speed > 0.5 && (
-                    <text x={anchorX + CAR_W / 2} y="20" textAnchor="middle" fontFamily={MONO} fontSize="11" fill={C.red}>
+                    <text x={anchorX + CAR_W / 2} y="20" textAnchor="middle" fontFamily={MONO} fontSize="11" fontWeight="700" fill={C.red}>
                       ⚠ LINE {st.hscb ? "DE-ENERGIZED" : "HSCB OPEN"}
                     </text>
                   )}
