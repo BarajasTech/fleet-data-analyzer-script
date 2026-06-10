@@ -18,23 +18,23 @@ const FONTS = `
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 `;
 
-/* Dark instrument palette (matches the LRV consist animator): deep slate
-   surfaces, light slate text, amber/teal/red/green functional accents. */
+/* Light palette: white panels on a soft gray page, deep-navy text, Siemens
+   petrol primary (#009999) with functional red/green/blue/violet accents. */
 const C = {
-  bg: "#10161D", panel: "#1A222C", panelEdge: "#27313D",
-  ink: "#D7E0EA", dim: "#7A8794", faint: "#3a4654",
-  amber: "#3FB6C9", red: "#E5534B", green: "#4CC38A", cyan: "#5aa9d6", violet: "#9b86f0",
-  petrol: "#3FB6C9",
+  bg: "#eef1f4", panel: "#ffffff", panelEdge: "#dde1e7",
+  ink: "#000028", dim: "#66667e", faint: "#c0c0cc",
+  amber: "#009999", red: "#d72339", green: "#1b8038", cyan: "#00557c", violet: "#7353e5",
+  petrol: "#009999",
 };
 const SIG_COLORS = [
-  "#3FB6C9", "#5aa9d6", "#E5534B", "#9b86f0",
-  "#f08a3c", "#4CC38A", "#d6b740", "#e06aa0",
-  "#3fcab0", "#9a9ae0", "#9ed14e", "#56b0f0",
-  "#d56ab0", "#46c4b6", "#e8794a", "#8aa0c0",
+  "#009999", "#00557c", "#d72339", "#7353e5",
+  "#e96401", "#1b8038", "#99700a", "#cc3377",
+  "#006b5e", "#5e5e8e", "#4e7b0f", "#0e6fc0",
+  "#962b6e", "#2f8f83", "#b0451b", "#44546a",
 ];
 const VEH = {
-  1: { tag: "#3FB6C9", fault: "#E5534B", dash: undefined },
-  2: { tag: "#5aa9d6", fault: "#9b86f0", dash: "7 4" },
+  1: { tag: "#009999", fault: "#d72339", dash: undefined },
+  2: { tag: "#00557c", fault: "#7353e5", dash: "7 4" },
 };
 
 /* Output-format directive for the sacrt-analyst-* fine-tunes. These models were trained
@@ -224,7 +224,7 @@ const Label = ({ children }) => (
 );
 const Select = ({ value, onChange, options, placeholder }) => (
   <select value={value || ""} onChange={(e) => onChange(e.target.value || null)}
-    style={{ width: "100%", background: "#141b24", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "8px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }}>
+    style={{ width: "100%", background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "8px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }}>
     <option value="">{placeholder || "— select —"}</option>
     {options.map((o) => (<option key={o} value={o}>{o}</option>))}
   </select>
@@ -235,8 +235,8 @@ function Btn({ children, onClick, primary, disabled, small }) {
       style={{
         fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase",
         fontSize: small ? 12 : 14, padding: small ? "6px 12px" : "10px 22px", cursor: disabled ? "not-allowed" : "pointer",
-        background: primary ? (disabled ? "#1f3a3f" : C.amber) : "transparent",
-        color: primary ? (disabled ? "#4d6d6d" : "#ffffff") : C.amber,
+        background: primary ? (disabled ? "#cfe6e6" : C.amber) : "transparent",
+        color: primary ? (disabled ? "#5d8f8f" : "#ffffff") : C.amber,
         border: `1px solid ${primary ? "transparent" : C.amber}`,
         borderRadius: 3, opacity: disabled ? 0.5 : 1, transition: "all .15s",
       }}>{children}</button>
@@ -246,7 +246,7 @@ const Chip = ({ active, onClick, children, color }) => (
   <div onClick={onClick} style={{
     fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, padding: "4px 10px", borderRadius: 3, cursor: "pointer",
     border: `1px solid ${active ? (color || C.amber) : C.faint}`, color: active ? (color || C.amber) : C.dim,
-    background: active ? "#1b2e34" : "transparent", whiteSpace: "nowrap",
+    background: active ? "#e9f1f1" : "transparent", whiteSpace: "nowrap",
   }}>{children}</div>
 );
 
@@ -265,16 +265,16 @@ function SignalDropdown({ label, color, allSignals, selected, onChange }) {
       <button onClick={() => setOpen(!open)}
         style={{
           fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase",
-          fontSize: 12, padding: "6px 12px", cursor: "pointer", background: open ? "#1b2e34" : "transparent",
+          fontSize: 12, padding: "6px 12px", cursor: "pointer", background: open ? "#e9f1f1" : "transparent",
           color: color, border: `1px solid ${color}`, borderRadius: 3,
         }}>
         {label} ({selected.length}/{allSignals.length}) {open ? "▴" : "▾"}
       </button>
       {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 50, width: 340, maxWidth: "85vw", background: "#1A222C", border: `1px solid ${C.faint}`, borderRadius: 6, boxShadow: "0 8px 30px rgba(40,50,60,0.18)", padding: 10 }}>
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 50, width: 340, maxWidth: "85vw", background: "#ffffff", border: `1px solid ${C.faint}`, borderRadius: 6, boxShadow: "0 8px 30px rgba(40,50,60,0.18)", padding: 10 }}>
           <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
             <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search signals…"
-              style={{ flex: 1, background: "#141b24", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
+              style={{ flex: 1, background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
             <span onClick={() => setOpen(false)} style={{ color: C.dim, cursor: "pointer", padding: "4px 6px" }}>✕</span>
           </div>
           <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
@@ -287,7 +287,7 @@ function SignalDropdown({ label, color, allSignals, selected, onChange }) {
               const idx = selected.indexOf(c);
               return (
                 <div key={c} onClick={() => toggle(c)}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 6px", borderRadius: 3, cursor: "pointer", background: on ? "#1b2e34" : "transparent" }}>
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 6px", borderRadius: 3, cursor: "pointer", background: on ? "#e9f1f1" : "transparent" }}>
                   <span style={{ width: 13, height: 13, borderRadius: 2, flexShrink: 0, border: `1px solid ${on ? SIG_COLORS[idx % SIG_COLORS.length] : C.faint}`, background: on ? SIG_COLORS[idx % SIG_COLORS.length] : "transparent" }} />
                   <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: on ? C.ink : C.dim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c}</span>
                 </div>
@@ -388,7 +388,7 @@ function FilePanel({ title, accent, data, setData, kind }) {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: C.ink, background: "#141b24", border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", display: "flex", justifyContent: "space-between", gap: 8 }}>
+          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: C.ink, background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", display: "flex", justifyContent: "space-between", gap: 8 }}>
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📄 {data.fileName}</span>
             <span style={{ color: C.red, cursor: "pointer" }} onClick={() => setData(null)}>✕</span>
           </div>
@@ -412,7 +412,7 @@ function FilePanel({ title, accent, data, setData, kind }) {
             <div>
               <Label>Signal channels — {data.numericCols.length} numeric found · {data.signals.length} selected</Label>
               <input value={sigSearch} onChange={(e) => setSigSearch(e.target.value)} placeholder="Search signals… e.g. speed, brake"
-                style={{ width: "100%", boxSizing: "border-box", background: "#141b24", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none", marginBottom: 8 }} />
+                style={{ width: "100%", boxSizing: "border-box", background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none", marginBottom: 8 }} />
               <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
                 <Btn small onClick={() => {
                   const q = sigSearch.trim().toLowerCase();
@@ -438,7 +438,7 @@ function FilePanel({ title, accent, data, setData, kind }) {
                         fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, padding: "5px 10px", borderRadius: 3, cursor: "pointer",
                         border: `1px solid ${on ? SIG_COLORS[idx % SIG_COLORS.length] : C.faint}`,
                         color: on ? SIG_COLORS[idx % SIG_COLORS.length] : C.dim,
-                        background: on ? "#1b2e34" : "transparent",
+                        background: on ? "#e9f1f1" : "transparent",
                       }}>{c}</div>
                   );
                 })}
@@ -483,7 +483,7 @@ function CopyCmd({ cmd }) {
   };
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "stretch", margin: "4px 0" }}>
-      <code style={{ flex: 1, background: "#0d1219", color: "#d4dde7", borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, overflowX: "auto", whiteSpace: "pre" }}>{cmd}</code>
+      <code style={{ flex: 1, background: "#1d2129", color: "#e8e8e3", borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, overflowX: "auto", whiteSpace: "pre" }}>{cmd}</code>
       <button onClick={copy} style={{ background: done ? "#0d8a3e" : C.petrol, color: "#fff", border: "none", borderRadius: 4, padding: "0 12px", cursor: "pointer", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, whiteSpace: "nowrap" }}>{done ? "Copied ✓" : "Copy"}</button>
     </div>
   );
@@ -520,7 +520,7 @@ function VcuPanel({ accent, data, setData }) {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: C.ink, background: "#141b24", border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", display: "flex", justifyContent: "space-between", gap: 8 }}>
+          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: C.ink, background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", display: "flex", justifyContent: "space-between", gap: 8 }}>
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📄 {data.fileName}</span>
             <span style={{ color: C.red, cursor: "pointer" }} onClick={() => setData(null)}>✕</span>
           </div>
@@ -543,7 +543,7 @@ const DarkTooltip = ({ active, payload, label, labelMap }) => {
   if (!active || !payload?.length) return null;
   const realLabel = typeof label === "number" && labelMap ? labelMap(label) : label;
   return (
-    <div style={{ background: "#1A222C", border: `1px solid ${C.faint}`, borderRadius: 4, padding: "8px 12px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, maxWidth: 320 }}>
+    <div style={{ background: "#ffffff", border: `1px solid ${C.faint}`, borderRadius: 4, padding: "8px 12px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, maxWidth: 320 }}>
       <div style={{ color: C.dim, marginBottom: 4 }}>{typeof realLabel === "number" ? fmtFull(realLabel) : realLabel}</div>
       {payload.map((p, i) => (
         <div key={i} style={{ color: p.color || C.ink }}>{p.name}: <b>{typeof p.value === "number" ? p.value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : p.value}</b></div>
@@ -568,10 +568,10 @@ function DigitalLane({ label, color, tagColor, pts, domain, faults, selFault, cu
   }
   return (
     <div className="lane-row" data-label={label} data-color={color} style={{ display: "flex", alignItems: "stretch", borderTop: `1px solid ${C.panelEdge}` }}>
-      <div style={{ flex: "0 0 190px", minWidth: 0, fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", color, padding: "0 8px", borderRight: `1px solid ${C.panelEdge}`, borderLeft: `3px solid ${tagColor || "transparent"}`, display: "flex", alignItems: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", background: "#141b24" }} title={label}>
+      <div style={{ flex: "0 0 190px", minWidth: 0, fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", color, padding: "0 8px", borderRight: `1px solid ${C.panelEdge}`, borderLeft: `3px solid ${tagColor || "transparent"}`, display: "flex", alignItems: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", background: "#f3f3f0" }} title={label}>
         {label}
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ flex: 1, height: 28, display: "block", background: "#1A222C" }}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ flex: 1, height: 28, display: "block", background: "#ffffff" }}>
         {faults.map((f) => {
           const fx = x(f.t);
           if (fx < 0 || fx > W) return null;
@@ -612,10 +612,10 @@ function FaultLane({ label, color, tagColor, events, domain, cursor }) {
   d += `L${W},${base}`;
   return (
     <div className="lane-row" data-label={`${label} ×${events.length}`} data-color={color} style={{ display: "flex", alignItems: "stretch", borderTop: `1px solid ${C.panelEdge}` }}>
-      <div style={{ flex: "0 0 190px", minWidth: 0, fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", color, padding: "0 8px", borderRight: `1px solid ${C.panelEdge}`, borderLeft: `3px solid ${tagColor || "transparent"}`, display: "flex", alignItems: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", background: "#141b24", fontWeight: 600 }} title={`${label} — ${events.length} in window`}>
+      <div style={{ flex: "0 0 190px", minWidth: 0, fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", color, padding: "0 8px", borderRight: `1px solid ${C.panelEdge}`, borderLeft: `3px solid ${tagColor || "transparent"}`, display: "flex", alignItems: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", background: "#f3f3f0", fontWeight: 600 }} title={`${label} — ${events.length} in window`}>
         {label}&nbsp;<span style={{ color: C.dim, fontWeight: 400 }}>×{events.length}</span>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ flex: 1, height: 28, display: "block", background: "#1A222C" }}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ flex: 1, height: 28, display: "block", background: "#ffffff" }}>
         <path d={d} fill="none" stroke={color} strokeWidth={1.3} vectorEffect="non-scaling-stroke" />
         {cursor != null && cursor >= a && cursor <= b && <line x1={x(cursor)} x2={x(cursor)} y1={0} y2={H} stroke={C.cyan} strokeWidth={1.4} vectorEffect="non-scaling-stroke" />}
       </svg>
@@ -638,16 +638,16 @@ function FaultLaneDropdown({ allCodes, selected, onChange, label = "⚠ Fault la
       <button onClick={() => setOpen(!open)}
         style={{
           fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase",
-          fontSize: 12, padding: "6px 12px", cursor: "pointer", background: open ? "#1b2e34" : "transparent",
+          fontSize: 12, padding: "6px 12px", cursor: "pointer", background: open ? "#e9f1f1" : "transparent",
           color: color, border: `1px solid ${color}`, borderRadius: 3,
         }}>
         {label} ({selected.length || (emptyMeansAll ? "all" : 0)}) {open ? "▴" : "▾"}
       </button>
       {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 50, width: 360, maxWidth: "85vw", background: "#1A222C", border: `1px solid ${C.faint}`, borderRadius: 6, boxShadow: "0 8px 24px rgba(40,50,60,0.18)", padding: 10 }}>
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 50, width: 360, maxWidth: "85vw", background: "#ffffff", border: `1px solid ${C.faint}`, borderRadius: 6, boxShadow: "0 8px 24px rgba(40,50,60,0.18)", padding: 10 }}>
           <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
             <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search fault codes…"
-              style={{ flex: 1, background: "#141b24", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
+              style={{ flex: 1, background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
             <span onClick={() => setOpen(false)} style={{ color: C.dim, cursor: "pointer", padding: "4px 6px" }}>✕</span>
           </div>
           <div style={{ display: "flex", gap: 6, marginBottom: 8 }}><Btn small onClick={() => onChange(capped(allCodes.map((p) => p.code)))}>Select all{Number.isFinite(maxSelect) ? ` (max ${maxSelect})` : ""}</Btn><Btn small onClick={() => onChange([])}>Clear</Btn></div>
@@ -656,7 +656,7 @@ function FaultLaneDropdown({ allCodes, selected, onChange, label = "⚠ Fault la
               const on = selected.includes(p.code);
               return (
                 <div key={p.code} onClick={() => toggle(p.code)}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 6px", borderRadius: 3, cursor: "pointer", background: on ? "#1b2e34" : "transparent" }}>
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 6px", borderRadius: 3, cursor: "pointer", background: on ? "#e9f1f1" : "transparent" }}>
                   <span style={{ width: 13, height: 13, borderRadius: 2, flexShrink: 0, border: `1px solid ${on ? color : C.faint}`, background: on ? color : "transparent" }} />
                   <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: on ? C.ink : C.dim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.code}{p.desc ? ` — ${p.desc}` : ""} ({p.count})</span>
                 </div>
@@ -2054,7 +2054,7 @@ export default function FleetDataAnalyzer() {
     return (
       <div style={{ border: `1px solid ${C.panelEdge}`, borderTop: "none", overflow: "hidden" }}>
         {scrollable && (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 10px", background: "#141b24", borderBottom: `1px solid ${C.panelEdge}`, fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: C.dim }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 10px", background: "#f3f3f0", borderBottom: `1px solid ${C.panelEdge}`, fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: C.dim }}>
             <span>Fault lanes · {vName} ({lanes.length})</span>
             <span style={{ fontFamily: "'IBM Plex Mono', monospace", textTransform: "none", letterSpacing: 0, fontWeight: 400, fontSize: 9 }}>scroll for more ↓</span>
           </div>
@@ -2183,8 +2183,8 @@ export default function FleetDataAnalyzer() {
           }, null)?.f;
 
           const lamp = (on, color, text) => (
-            <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", background: "#141b24", border: `1px solid ${on ? color : C.faint}`, borderRadius: 6 }}>
-              <span style={{ width: 9, height: 9, borderRadius: 9, background: on ? color : "#3a4654", boxShadow: on ? `0 0 8px ${color}` : "none", transition: "all .25s" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", background: "#f3f3f0", border: `1px solid ${on ? color : C.faint}`, borderRadius: 6 }}>
+              <span style={{ width: 9, height: 9, borderRadius: 9, background: on ? color : "#cdcdd6", boxShadow: on ? `0 0 8px ${color}` : "none", transition: "all .25s" }} />
               <span style={{ fontFamily: MONO, fontSize: 11, color: on ? C.ink : C.dim, letterSpacing: 0.5 }}>{text}</span>
             </div>
           );
@@ -2202,7 +2202,7 @@ export default function FleetDataAnalyzer() {
               {/* readouts */}
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
                 {readouts.map(([lab, val, unit, color]) => (
-                  <div key={lab} style={{ background: "#141b24", border: `1px solid ${C.panelEdge}`, borderRadius: 6, padding: "7px 14px", minWidth: 116 }}>
+                  <div key={lab} style={{ background: "#f3f3f0", border: `1px solid ${C.panelEdge}`, borderRadius: 6, padding: "7px 14px", minWidth: 116 }}>
                     <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 10, color: C.dim, letterSpacing: "0.14em", textTransform: "uppercase" }}>{lab}</div>
                     <div style={{ fontFamily: MONO, fontSize: 21, color }}>{val} <span style={{ fontSize: 11, color: C.dim }}>{unit}</span></div>
                   </div>
@@ -2225,37 +2225,37 @@ export default function FleetDataAnalyzer() {
                 </div>
               </div>
 
-              {/* scene */}
-              <div style={{ background: "#080d14", border: `1px solid ${C.panelEdge}`, borderRadius: 6, overflow: "hidden" }}>
+              {/* scene — daylight */}
+              <div style={{ background: "#dfeaf2", border: `1px solid ${C.panelEdge}`, borderRadius: 6, overflow: "hidden" }}>
                 <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} width="100%" style={{ display: "block" }}>
                   <defs>
                     <linearGradient id="lrvsky" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0" stopColor="#0a1230" /><stop offset="1" stopColor="#080d14" />
+                      <stop offset="0" stopColor="#9ec3e6" /><stop offset="1" stopColor="#e8f1f8" />
                     </linearGradient>
                   </defs>
                   <rect width={VIEW_W} height={VIEW_H} fill="url(#lrvsky)" />
-                  {/* catenary: dims when dead */}
-                  <line x1="0" y1="34" x2={VIEW_W} y2="34" stroke={vDead ? "#2A333D" : "#46525E"} strokeWidth="1.5" />
+                  {/* catenary: lightens (fades) when dead */}
+                  <line x1="0" y1="34" x2={VIEW_W} y2="34" stroke={vDead ? "#c2cad2" : "#6e7a86"} strokeWidth="1.5" />
                   {range(32).map((d) => { const x = toScreen(d); return (
                     <g key={d}>
-                      <line x1={x} y1={RAIL_Y} x2={x} y2="28" stroke="#2B3540" strokeWidth="4" />
-                      <line x1={x} y1="34" x2={x + 26} y2="34" stroke="#2B3540" strokeWidth="3" />
+                      <line x1={x} y1={RAIL_Y} x2={x} y2="28" stroke="#9aa6b2" strokeWidth="4" />
+                      <line x1={x} y1="34" x2={x + 26} y2="34" stroke="#9aa6b2" strokeWidth="3" />
                     </g> ); })}
-                  {/* stations */}
+                  {/* stations — warm concrete platform */}
                   {consistMeta.stops.map((d, i) => { const x = toScreen(d); if (x < -800 || x > VIEW_W + 800) return null; return (
                     <g key={i}>
-                      <rect x={x - 320} y={RAIL_Y - 14} width="640" height="14" fill="#222B34" />
-                      <rect x={x - 320} y={RAIL_Y - 16} width="640" height="3" fill={C.amber} opacity="0.5" />
-                      <text x={x} y={RAIL_Y - 24} textAnchor="middle" fontFamily={MONO} fontSize="11" fill="#7A8794">STOP {i + 1}</text>
+                      <rect x={x - 320} y={RAIL_Y - 14} width="640" height="14" fill="#d6cebf" />
+                      <rect x={x - 320} y={RAIL_Y - 16} width="640" height="3" fill={C.amber} opacity="0.6" />
+                      <text x={x} y={RAIL_Y - 24} textAnchor="middle" fontFamily={MONO} fontSize="11" fill="#7a7060">STOP {i + 1}</text>
                     </g> ); })}
-                  {/* ties + rail */}
-                  {range(1.6).map((d) => <rect key={d} x={toScreen(d) - 2} y={RAIL_Y + 3} width="4" height="9" fill="#23211C" />)}
-                  <rect x="0" y={RAIL_Y} width={VIEW_W} height="3.5" fill={LRV.rail} />
-                  <rect x="0" y={RAIL_Y + 12} width={VIEW_W} height={VIEW_H - RAIL_Y - 12} fill="#0c1422" />
+                  {/* warm ballast bed, wooden ties + steel rail */}
+                  <rect x="0" y={RAIL_Y + 12} width={VIEW_W} height={VIEW_H - RAIL_Y - 12} fill="#cdbfa7" />
+                  {range(1.6).map((d) => <rect key={d} x={toScreen(d) - 2} y={RAIL_Y + 3} width="4" height="9" fill="#9c7b54" />)}
+                  <rect x="0" y={RAIL_Y} width={VIEW_W} height="3.5" fill="#9097a0" />
                   {range(100).map((d) => d >= 0 && (
                     <g key={d}>
-                      <line x1={toScreen(d)} y1={RAIL_Y + 14} x2={toScreen(d)} y2={RAIL_Y + 26} stroke="#3A4450" strokeWidth="1.5" />
-                      <text x={toScreen(d) + 4} y={RAIL_Y + 28} fontFamily={MONO} fontSize="10" fill="#4A5663">{(d / 1000).toFixed(1)} km</text>
+                      <line x1={toScreen(d)} y1={RAIL_Y + 14} x2={toScreen(d)} y2={RAIL_Y + 26} stroke="#b0a279" strokeWidth="1.5" />
+                      <text x={toScreen(d) + 4} y={RAIL_Y + 28} fontFamily={MONO} fontSize="10" fill="#8a7f6a">{(d / 1000).toFixed(1)} km</text>
                     </g> ))}
 
                   {/* partner car */}
@@ -2323,7 +2323,7 @@ export default function FleetDataAnalyzer() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: C.ink, fontFamily: "'IBM Plex Mono', monospace", backgroundImage: "radial-gradient(circle at 20% 0%, rgba(63,182,201,0.08), transparent 40%), repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.025) 3px, rgba(255,255,255,0.025) 4px)" }}>
+    <div style={{ minHeight: "100vh", background: C.bg, color: C.ink, fontFamily: "'IBM Plex Mono', monospace", backgroundImage: "radial-gradient(circle at 20% 0%, rgba(0,153,153,0.05), transparent 40%), repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(20,30,40,0.012) 3px, rgba(20,30,40,0.012) 4px)" }}>
       <style>{FONTS}</style>
 
       <div style={{ borderBottom: `1px solid ${C.panelEdge}`, padding: "18px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
@@ -2434,7 +2434,7 @@ export default function FleetDataAnalyzer() {
 
                   {/* ---------- time sync panel ---------- */}
                   {syncOpen && (
-                    <div style={{ background: "#141b24", border: `1px solid ${C.faint}`, borderRadius: 6, padding: 12, marginBottom: 12 }}>
+                    <div style={{ background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 6, padding: 12, marginBottom: 12 }}>
                       <div style={{ fontSize: 11, color: C.ink, marginBottom: 10, fontFamily: "'IBM Plex Mono', monospace" }}>
                         Fault-log ↔ recorder time alignment. Both files are parsed at full precision (recorder: milliseconds; fault log: 1-second resolution, so ±0.5 s is inherent).
                         If the VCU clock and recorder clock drift, shift the fault timestamps until a fault pulse lines up with its recorder flag edge — positive = faults move later.
@@ -2447,7 +2447,7 @@ export default function FleetDataAnalyzer() {
                           <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: "0.1em", textTransform: "uppercase", color: VEH[v.n].tag, width: 110 }}>{v.name}</span>
                           {[-60, -10, -1, -0.5].map((d) => <Chip key={d} onClick={() => v.setOff(+(v.off + d).toFixed(1))}>{d}s</Chip>)}
                           <input type="number" step="0.1" value={v.off} onChange={(e) => v.setOff(e.target.value === "" ? 0 : +e.target.value)}
-                            style={{ width: 90, background: "#1f2730", color: v.off !== 0 ? C.amber : C.ink, fontWeight: v.off !== 0 ? 600 : 400, border: `1px solid ${v.off !== 0 ? C.amber : C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none", textAlign: "center" }} />
+                            style={{ width: 90, background: "#fff", color: v.off !== 0 ? C.amber : C.ink, fontWeight: v.off !== 0 ? 600 : 400, border: `1px solid ${v.off !== 0 ? C.amber : C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none", textAlign: "center" }} />
                           <span style={{ fontSize: 10, color: C.dim }}>sec</span>
                           {[0.5, 1, 10, 60].map((d) => <Chip key={d} onClick={() => v.setOff(+(v.off + d).toFixed(1))}>+{d}s</Chip>)}
                           <Chip onClick={() => v.setOff(0)} color={C.red}>reset</Chip>
@@ -2462,16 +2462,16 @@ export default function FleetDataAnalyzer() {
 
                   {/* ---------- time range panel ---------- */}
                   {rangeOpen && (
-                    <div style={{ background: "#141b24", border: `1px solid ${C.faint}`, borderRadius: 6, padding: 12, marginBottom: 12, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+                    <div style={{ background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 6, padding: 12, marginBottom: 12, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
                       <div>
                         <Label>From</Label>
                         <input type="datetime-local" step="1" value={rangeFrom} onChange={(e) => setRangeFrom(e.target.value)}
-                          style={{ background: "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
+                          style={{ background: "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
                       </div>
                       <div>
                         <Label>To</Label>
                         <input type="datetime-local" step="1" value={rangeTo} onChange={(e) => setRangeTo(e.target.value)}
-                          style={{ background: "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
+                          style={{ background: "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
                       </div>
                       <Btn small primary onClick={applyRange}>Apply</Btn>
                       <div style={{ display: "flex", gap: 6, alignItems: "center", paddingBottom: 2 }}>
@@ -2486,27 +2486,27 @@ export default function FleetDataAnalyzer() {
 
                   {/* ---------- edit panel ---------- */}
                   {editOpen && (
-                    <div style={{ background: "#141b24", border: `1px solid ${C.faint}`, borderRadius: 6, padding: 14, marginBottom: 12 }}>
+                    <div style={{ background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 6, padding: 14, marginBottom: 12 }}>
                       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 12 }}>
                         <div style={{ flex: "2 1 220px" }}>
                           <Label>Graph title</Label>
                           <input value={chartCfg.title} onChange={(e) => setChartCfg({ ...chartCfg, title: e.target.value })} placeholder="e.g. Car 224 — ATP Safety Brake events vs speed"
-                            style={{ width: "100%", boxSizing: "border-box", background: "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
+                            style={{ width: "100%", boxSizing: "border-box", background: "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
                         </div>
                         <div style={{ flex: "0 0 90px" }}>
                           <Label>Y min</Label>
                           <input value={chartCfg.yMin} disabled={normalize} onChange={(e) => setChartCfg({ ...chartCfg, yMin: e.target.value })} placeholder="auto"
-                            style={{ width: "100%", boxSizing: "border-box", background: normalize ? "#161d26" : "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
+                            style={{ width: "100%", boxSizing: "border-box", background: normalize ? "#e8e8e3" : "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
                         </div>
                         <div style={{ flex: "0 0 90px" }}>
                           <Label>Y max</Label>
                           <input value={chartCfg.yMax} disabled={normalize} onChange={(e) => setChartCfg({ ...chartCfg, yMax: e.target.value })} placeholder="auto"
-                            style={{ width: "100%", boxSizing: "border-box", background: normalize ? "#161d26" : "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
+                            style={{ width: "100%", boxSizing: "border-box", background: normalize ? "#e8e8e3" : "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
                         </div>
                         <div style={{ flex: "0 0 150px" }}>
                           <Label>Fault display</Label>
                           <select value={chartCfg.faultStyle} onChange={(e) => setChartCfg({ ...chartCfg, faultStyle: e.target.value })}
-                            style={{ width: "100%", background: "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 8px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }}>
+                            style={{ width: "100%", background: "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 8px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }}>
                             <option value="overlay">overlay signal</option>
                             <option value="markers">marker lines</option>
                             <option value="both">both</option>
@@ -2535,22 +2535,22 @@ export default function FleetDataAnalyzer() {
                           return (
                             <React.Fragment key={d.cfgKey}>
                               <input value={o.label ?? d.cfgKey} onChange={(e) => updateSeries(d.cfgKey, { label: e.target.value })}
-                                style={{ background: "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 3, padding: "5px 8px", fontFamily: "inherit", fontSize: 11, outline: "none", minWidth: 0 }} />
+                                style={{ background: "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 3, padding: "5px 8px", fontFamily: "inherit", fontSize: 11, outline: "none", minWidth: 0 }} />
                               <input type="color" value={cur.color} onChange={(e) => updateSeries(d.cfgKey, { color: e.target.value })}
-                                style={{ width: 36, height: 26, padding: 0, border: `1px solid ${C.faint}`, borderRadius: 3, background: "#1f2730", cursor: "pointer" }} />
+                                style={{ width: 36, height: 26, padding: 0, border: `1px solid ${C.faint}`, borderRadius: 3, background: "#fff", cursor: "pointer" }} />
                               <select value={o.style || (d.defDash ? "dashed" : "solid")} onChange={(e) => updateSeries(d.cfgKey, { style: e.target.value })}
-                                style={{ background: "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 3, padding: "5px 6px", fontFamily: "inherit", fontSize: 11, outline: "none" }}>
+                                style={{ background: "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 3, padding: "5px 6px", fontFamily: "inherit", fontSize: 11, outline: "none" }}>
                                 {["solid", "dashed", "dotted"].map((s) => <option key={s} value={s}>{s}</option>)}
                               </select>
                               <select value={o.curve || "linear"} onChange={(e) => updateSeries(d.cfgKey, { curve: e.target.value })}
-                                style={{ background: "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 3, padding: "5px 6px", fontFamily: "inherit", fontSize: 11, outline: "none" }}>
+                                style={{ background: "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 3, padding: "5px 6px", fontFamily: "inherit", fontSize: 11, outline: "none" }}>
                                 <option value="linear">line</option>
                                 <option value="smooth">smooth</option>
                                 <option value="step">step</option>
                                 <option value="area">area</option>
                               </select>
                               <select value={String(o.width || 1.6)} onChange={(e) => updateSeries(d.cfgKey, { width: e.target.value })}
-                                style={{ background: "#1f2730", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 3, padding: "5px 6px", fontFamily: "inherit", fontSize: 11, outline: "none" }}>
+                                style={{ background: "#fff", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 3, padding: "5px 6px", fontFamily: "inherit", fontSize: 11, outline: "none" }}>
                                 {["1", "1.6", "2.5", "3.5"].map((w) => <option key={w} value={w}>{w}px</option>)}
                               </select>
                               <input type="checkbox" checked={!!o.dots} onChange={(e) => updateSeries(d.cfgKey, { dots: e.target.checked })} style={{ accentColor: cur.color, justifySelf: "start", cursor: "pointer" }} />
@@ -2573,7 +2573,7 @@ export default function FleetDataAnalyzer() {
                     const frac = ov / win;
                     if (frac >= 0.15) return null;
                     return (
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#2a2410", border: `1px solid ${C.amber}`, borderRadius: 4, padding: "7px 12px", marginBottom: 8, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", color: C.ink }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#fdf6e7", border: `1px solid ${C.amber}`, borderRadius: 4, padding: "7px 12px", marginBottom: 8, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", color: C.ink }}>
                         <span style={{ color: C.amber, fontWeight: 700 }}>⚠</span>
                         {ov === 0
                           ? <span>No recorder data in this window — only fault markers are available here. Recorder coverage: {fmtFull(recSpan[0])} → {fmtFull(recSpan[1])}.</span>
@@ -2588,7 +2588,7 @@ export default function FleetDataAnalyzer() {
                     onPointerUp={chartPointerUp} onPointerLeave={chartPointerUp}
                     style={{ cursor: selectMode ? "crosshair" : "grab", touchAction: "pan-y", userSelect: "none", position: "relative" }}>
                     {band && (
-                      <div style={{ position: "absolute", top: 0, bottom: 0, left: band.x1, width: Math.max(band.x2 - band.x1, 1), background: "rgba(63,182,201,0.18)", border: `1px solid ${C.amber}`, pointerEvents: "none", zIndex: 5 }} />
+                      <div style={{ position: "absolute", top: 0, bottom: 0, left: band.x1, width: Math.max(band.x2 - band.x1, 1), background: "rgba(0,153,153,0.12)", border: `1px solid ${C.amber}`, pointerEvents: "none", zIndex: 5 }} />
                     )}
                     {(!v2Active || viewMode === "combined") ? (
                       <>
@@ -2615,7 +2615,7 @@ export default function FleetDataAnalyzer() {
                   {/* minimap: spans the recorder recording */}
                   {navFull && (
                     <div onPointerDown={mmPointerDown} onPointerMove={mmPointerMove} onPointerUp={mmPointerUp} onPointerLeave={mmPointerUp}
-                      style={{ position: "relative", height: 36, background: "#141b24", border: `1px solid ${C.faint}`, borderRadius: 4, marginTop: 10, touchAction: "none", cursor: "pointer", overflow: "hidden", userSelect: "none" }}>
+                      style={{ position: "relative", height: 36, background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 4, marginTop: 10, touchAction: "none", cursor: "pointer", overflow: "hidden", userSelect: "none" }}>
                       {[{ span: recSpan1, col: VEH[1].tag }, { span: recSpan2, col: VEH[2].tag }].map((b, i) => b.span && (
                         <div key={i} style={{
                           position: "absolute", top: i === 0 ? 0 : "50%", height: v2Active ? "50%" : "100%", bottom: 0,
@@ -2631,7 +2631,7 @@ export default function FleetDataAnalyzer() {
                         position: "absolute", top: 0, bottom: 0,
                         left: `${((activeDomain[0] - navFull[0]) / (navFull[1] - navFull[0])) * 100}%`,
                         width: `${Math.max(((activeDomain[1] - activeDomain[0]) / (navFull[1] - navFull[0])) * 100, 0.6)}%`,
-                        background: "rgba(63,182,201,0.14)", border: `1px solid ${C.amber}`, borderRadius: 3, cursor: "grab",
+                        background: "rgba(0,153,153,0.10)", border: `1px solid ${C.amber}`, borderRadius: 3, cursor: "grab",
                       }} />
                       <div style={{ position: "absolute", left: 6, bottom: 2, fontSize: 9, color: C.dim, fontFamily: "'IBM Plex Mono', monospace", pointerEvents: "none" }}>{fmtFull(navFull[0])}</div>
                       <div style={{ position: "absolute", right: 6, bottom: 2, fontSize: 9, color: C.dim, fontFamily: "'IBM Plex Mono', monospace", pointerEvents: "none" }}>{fmtFull(navFull[1])}</div>
@@ -2640,7 +2640,7 @@ export default function FleetDataAnalyzer() {
 
                   {/* ---------- signal snapshot at selected fault ---------- */}
                   {selSnapshot && (
-                    <div style={{ background: "#141b24", border: `1px solid ${C.amber}`, borderRadius: 6, padding: 12, marginTop: 10 }}>
+                    <div style={{ background: "#f3f3f0", border: `1px solid ${C.amber}`, borderRadius: 6, padding: 12, marginTop: 10 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
                         <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>
                           <span style={{ color: VEH[selSnapshot.vi].fault, fontWeight: 600 }}>{selSnapshot.f.code}</span>
@@ -2663,7 +2663,7 @@ export default function FleetDataAnalyzer() {
                           </div>
                           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                             {selSnapshot.rows.map(({ s, v, binary }) => (
-                              <div key={s} style={{ display: "flex", alignItems: "center", gap: 6, background: "#1f2730", border: `1px solid ${C.panelEdge}`, borderLeft: `3px solid ${seriesColorOf(selSnapshot.vi, s)}`, borderRadius: 4, padding: "5px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }}>
+                              <div key={s} style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", border: `1px solid ${C.panelEdge}`, borderLeft: `3px solid ${seriesColorOf(selSnapshot.vi, s)}`, borderRadius: 4, padding: "5px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }}>
                                 <span style={{ color: C.dim, maxWidth: 190, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s}>{s}</span>
                                 <span style={{ color: binary ? (v >= 0.5 ? C.green : C.red) : C.ink, fontWeight: 600 }}>
                                   {v == null ? "—" : binary ? (v >= 0.5 ? "HIGH (1)" : "LOW (0)") : v.toLocaleString(undefined, { maximumFractionDigits: 3 })}
@@ -2703,7 +2703,7 @@ export default function FleetDataAnalyzer() {
                         {(sel.length > 0 || q) && <span onClick={() => { clearSel(); setSearch(""); }} style={{ color: C.amber, fontSize: 11, cursor: "pointer" }}>clear ✕</span>}
                       </div>
                       <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${srcKey === "vcu" ? "VCU" : "Expert"} faults… code, description, time`}
-                        style={{ width: "100%", boxSizing: "border-box", background: "#141b24", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none", marginBottom: 8 }} />
+                        style={{ width: "100%", boxSizing: "border-box", background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "7px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none", marginBottom: 8 }} />
                       <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
                         {listFaults.slice(0, 800).map((f) => {
                           const key = `${f.vi}-${f.id}`;
@@ -2713,7 +2713,7 @@ export default function FleetDataAnalyzer() {
                             <div key={key} onClick={() => zoomToFault(f)}
                               style={{
                                 padding: "8px 10px", borderRadius: 4, cursor: "pointer",
-                                background: key === selFault ? "#1b2e34" : "#141b24",
+                                background: key === selFault ? "#e9f1f1" : "#f3f3f0",
                                 border: `1px solid ${key === selFault ? C.amber : C.faint}`,
                                 borderLeft: `3px solid ${VEH[f.vi].tag}`,
                                 opacity: inRec ? 1 : 0.55,
@@ -2765,9 +2765,9 @@ export default function FleetDataAnalyzer() {
                     {aiProvider === "ollama" && (
                       <>
                         <input value={ollamaUrl} onChange={(e) => setOllamaUrl(e.target.value)} placeholder="http://localhost:11434"
-                          style={{ width: 210, background: "#141b24", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
+                          style={{ width: 210, background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
                         <input value={ollamaModel} onChange={(e) => setOllamaModel(e.target.value)} placeholder="model e.g. sacrt-analyst-r1" list="ollama-models"
-                          style={{ width: 170, background: "#141b24", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
+                          style={{ width: 170, background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "6px 9px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, outline: "none" }} />
                         <datalist id="ollama-models">{ollamaModels.map((m) => <option key={m} value={m} />)}</datalist>
                         <Btn small onClick={listOllamaModels}>List models</Btn>
                         <Chip active={autoAnalyze} onClick={() => setAutoAnalyze(!autoAnalyze)} color={C.green}>Auto-analyze on load</Chip>
@@ -2779,7 +2779,7 @@ export default function FleetDataAnalyzer() {
                       {aiMessages.map((m, i) => (
                         <div key={i} style={{
                           alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "85%",
-                          background: m.role === "user" ? "#1b2e34" : "#141b24",
+                          background: m.role === "user" ? "#e9f1f1" : "#f3f3f0",
                           border: `1px solid ${m.role === "user" ? C.amber : C.panelEdge}`,
                           borderRadius: 6, padding: "8px 12px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: C.ink, whiteSpace: "pre-wrap",
                         }}>{m.content}</div>
@@ -2798,7 +2798,7 @@ export default function FleetDataAnalyzer() {
                     <input value={aiInput} onChange={(e) => setAiInput(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") askAi(); }}
                       placeholder={selFault ? "Ask about the selected event or the fault history…" : "Ask anything about the fault data… (select an event on the Timeline for event-specific answers)"}
-                      style={{ flex: 1, background: "#141b24", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "9px 12px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
+                      style={{ flex: 1, background: "#f3f3f0", color: C.ink, border: `1px solid ${C.faint}`, borderRadius: 4, padding: "9px 12px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
                     <Btn small primary disabled={aiBusy || !aiInput.trim()} onClick={() => askAi()}>{aiBusy ? "…" : "Ask"}</Btn>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, gap: 10, flexWrap: "wrap" }}>
@@ -2823,7 +2823,7 @@ export default function FleetDataAnalyzer() {
                         {setupOpen ? "Hide setup guide" : "First time? Click here for setup instructions (one-time, ~10 min)"}
                       </span>
                       {setupOpen && (
-                        <div style={{ marginTop: 8, background: "#141b24", border: `1px solid ${C.faint}`, borderRadius: 4, padding: "12px 14px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: C.ink }}>
+                        <div style={{ marginTop: 8, background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 4, padding: "12px 14px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: C.ink }}>
                           <div style={{ fontWeight: 700, marginBottom: 8, color: C.petrol }}>RUN THE AI ON YOUR OWN PC — your data never leaves your machine</div>
 
                           <div style={{ fontWeight: 600, marginBottom: 2 }}>1 · Install Ollama</div>
@@ -2851,13 +2851,13 @@ export default function FleetDataAnalyzer() {
                     </div>
                   )}
                   {aiProvider === "claude" && aiKeyOpen && (
-                    <div style={{ marginTop: 8, background: "#141b24", border: `1px solid ${C.faint}`, borderRadius: 4, padding: 10 }}>
+                    <div style={{ marginTop: 8, background: "#f3f3f0", border: `1px solid ${C.faint}`, borderRadius: 4, padding: 10 }}>
                       <div style={{ fontSize: 10, color: C.dim, fontFamily: "'IBM Plex Mono', monospace", marginBottom: 6 }}>
                         Hosting this outside Claude.ai (e.g. GitHub Pages)? Enter an Anthropic API key (console.anthropic.com). It is kept in memory only — never saved, never sent anywhere except api.anthropic.com. Do NOT hardcode it into the source or commit it to the repo.
                       </div>
                       <input type="password" value={aiKey} onChange={(e) => setAiKey(e.target.value)} placeholder="sk-ant-…"
                         autoComplete="off"
-                        style={{ width: "100%", boxSizing: "border-box", background: "#1f2730", color: C.ink, border: `1px solid ${aiKey ? C.green : C.faint}`, borderRadius: 4, padding: "8px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
+                        style={{ width: "100%", boxSizing: "border-box", background: "#fff", color: C.ink, border: `1px solid ${aiKey ? C.green : C.faint}`, borderRadius: 4, padding: "8px 10px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, outline: "none" }} />
                     </div>
                   )}
                 </div>
@@ -2890,7 +2890,7 @@ export default function FleetDataAnalyzer() {
                           <CartesianGrid stroke={C.faint} strokeDasharray="2 6" vertical={false} />
                           <XAxis dataKey="code" stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} interval={0} angle={-30} textAnchor="end" height={55} />
                           <YAxis stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} allowDecimals={false} width={40} />
-                          <Tooltip content={<DarkTooltip />} cursor={{ fill: "rgba(255,255,255,0.06)" }} />
+                          <Tooltip content={<DarkTooltip />} cursor={{ fill: "rgba(0,0,0,0.05)" }} />
                           <Bar dataKey="count" onClick={(d) => { const code = d?.code ?? d?.payload?.code; if (code != null) { toggleCode(code); setTab("timeline"); } }} cursor="pointer" isAnimationActive={false}>
                             {stats.pareto.slice(0, 12).map((e, i) => (
                               <Cell key={i} fill={visExpert.includes(e.code) || visVcu.includes(e.code) ? C.amber : C.red} fillOpacity={0.85} />
@@ -2907,7 +2907,7 @@ export default function FleetDataAnalyzer() {
                           <CartesianGrid stroke={C.faint} strokeDasharray="2 6" vertical={false} />
                           <XAxis dataKey="t" stroke={C.dim} tickFormatter={(t) => (stats.hourly ? fmtTime(t, 3600000) : fmtDay(t))} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} />
                           <YAxis stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} allowDecimals={false} width={40} />
-                          <Tooltip content={<DarkTooltip />} cursor={{ fill: "rgba(255,255,255,0.06)" }} />
+                          <Tooltip content={<DarkTooltip />} cursor={{ fill: "rgba(0,0,0,0.05)" }} />
                           <Bar dataKey="count" name="faults" fill={C.cyan} fillOpacity={0.85} isAnimationActive={false} />
                         </BarChart>
                       </ResponsiveContainer>
@@ -2942,7 +2942,7 @@ export default function FleetDataAnalyzer() {
                                   <CartesianGrid stroke={C.faint} strokeDasharray="2 6" horizontal={false} />
                                   <XAxis type="number" stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} allowDecimals={false} />
                                   <YAxis type="category" dataKey="code" stroke={C.dim} tick={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" }} width={62} />
-                                  <Tooltip content={<DarkTooltip />} cursor={{ fill: "rgba(255,255,255,0.06)" }} />
+                                  <Tooltip content={<DarkTooltip />} cursor={{ fill: "rgba(0,0,0,0.05)" }} />
                                   <Bar dataKey="lead" name="cascades led" fill={C.violet} fillOpacity={0.85} isAnimationActive={false}
                                     onClick={(d) => { const code = d?.code ?? d?.payload?.code; if (code != null) { toggleCode(code); setTab("timeline"); } }} cursor="pointer" />
                                 </BarChart>
@@ -2970,7 +2970,7 @@ export default function FleetDataAnalyzer() {
                                         const v = cascade.cellVal(r, cc);
                                         const diag = r === cc;
                                         const op = v > 0 && cascade.maxPair ? 0.12 + 0.88 * (v / cascade.maxPair) : 0;
-                                        const bg = diag ? "#221f33" : `rgba(63,182,201,${op})`;
+                                        const bg = diag ? "#ecebf6" : `rgba(0,153,153,${op})`;
                                         return (
                                           <td key={cc} title={diag ? `${r}: appears in ${v} cascade${v === 1 ? "" : "s"}` : `${r} + ${cc}: ${v} shared incident${v === 1 ? "" : "s"}`}
                                             style={{ width: 26, height: 24, textAlign: "center", fontSize: 9, background: bg, color: !diag && op > 0.55 ? "#fff" : C.dim, border: `1px solid ${C.panelEdge}` }}>
@@ -3027,7 +3027,7 @@ export default function FleetDataAnalyzer() {
                       </thead>
                       <tbody>
                         {stats.pareto.slice(0, 60).map((p) => (
-                          <tr key={p.code} style={{ borderBottom: `1px solid ${C.panelEdge}`, cursor: "pointer", background: visExpert.includes(p.code) || visVcu.includes(p.code) ? "#1b2e34" : "transparent" }}
+                          <tr key={p.code} style={{ borderBottom: `1px solid ${C.panelEdge}`, cursor: "pointer", background: visExpert.includes(p.code) || visVcu.includes(p.code) ? "#e9f1f1" : "transparent" }}
                             onClick={() => toggleCode(p.code)}>
                             <td style={{ padding: "7px 10px", color: C.red, fontWeight: 600 }}>{p.code}</td>
                             <td style={{ padding: "7px 10px", color: C.ink }}>{p.desc || "—"}</td>
